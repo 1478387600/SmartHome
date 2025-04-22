@@ -19,18 +19,18 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from client.parser import parse_llm_response
 from client.mcp_caller import init_mcp_client, call_tool, read_resource
 
-def load_llm_response_from_file(filepath: str) -> list[dict]:
-    """
-    从 JSON 文件中加载模拟的 LLM 响应列表。
+# def load_llm_response_from_file(filepath: str) -> list[dict]:
+#     """
+#     从 JSON 文件中加载模拟的 LLM 响应列表。
 
-    参数:
-        filepath: JSON 文件路径
+#     参数:
+#         filepath: JSON 文件路径
 
-    返回:
-        响应字典组成的列表
-    """
-    with open(filepath, 'r', encoding='utf-8') as f:
-        return json.load(f)
+#     返回:
+#         响应字典组成的列表
+#     """
+#     with open(filepath, 'r', encoding='utf-8') as f:
+#         return json.load(f)
 
 async def handle_llm_response(session, response_dict: dict) -> str:
     """
@@ -87,10 +87,12 @@ async def watch_instruction_file(session):
                             with open("data/results.json", "r+", encoding="utf-8") as res_file:
                                 results = json.load(res_file)
                                 print(f"🔄 Tool call result: {result}")  # 新增终端输出
+                                # Parse MCP response format to determine success
+                                is_success = "iserror=false" in result.lower()
                                 results[str(hash(line))] = {
-                                    "success": "error" not in result.lower(),
+                                    "success": is_success,
                                     "timestamp": datetime.now().isoformat(),
-                                    "status": "success" if "error" not in result.lower() else "failed",
+                                    "status": "success" if is_success else "failed", 
                                     "message": result
                                 }
                                 res_file.seek(0)
@@ -121,19 +123,19 @@ async def persistent_service():
         except Exception as e:
             print(f"⚠️ Error: {str(e)}")
 
-async def get_llm_instruction() -> dict:
-    """从LLM获取单条指令(模拟实现)"""
-    # 实际生产环境替换为真正的LLM接口调用
-    while True:
-        try:
-            data = input("Enter LLM instruction (or 'exit' to quit): ")
-            if data.lower() == 'exit':
-                raise asyncio.CancelledError
-            return json.loads(data)
-        except json.JSONDecodeError as e:
-            print(f"Invalid JSON format: {str(e)}")
-            print("Example valid format:")
-            print('{"text":"OK","type":"tool","name":"switch_device","arguments":{"device_id":"living_room_tv","status":"on"}}')
+# async def get_llm_instruction() -> dict:
+#     """从LLM获取单条指令(模拟实现)"""
+#     # 实际生产环境替换为真正的LLM接口调用
+#     while True:
+#         try:
+#             data = input("Enter LLM instruction (or 'exit' to quit): ")
+#             if data.lower() == 'exit':
+#                 raise asyncio.CancelledError
+#             return json.loads(data)
+#         except json.JSONDecodeError as e:
+#             print(f"Invalid JSON format: {str(e)}")
+#             print("Example valid format:")
+#             print('{"text":"OK","type":"tool","name":"switch_device","arguments":{"device_id":"living_room_tv","status":"on"}}')
 
 async def main():
     """启动持久化服务"""
