@@ -1,0 +1,4 @@
+# LLM指令队列文件
+# 每行一个JSON格式的指令
+{"text":"OK","type":"tool","name":"switch_device","arguments":{"device_id":"living_room_light","status":"on"}}
+{"type":"tool","name":"switch_device","arguments":{"device_id":"living_room_light","status":"off"}}

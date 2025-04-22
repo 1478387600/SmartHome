@@ -1,0 +1,26 @@
+# 初始设备与传感器注册配置
+devices:
+  - id: "living_room_light"
+    type: "Light"
+  - id: "living_room_tv"
+    type: "TV"
+  - id: "bedroom_ac"
+    type: "AirConditioner"
+  - id: "living_room_air_purifier"
+    type: "AirPurifier"
+  - id: "kitchen_window"
+    type: "Window"
+  - id: "bedroom_curtain"
+    type: "Curtain"
+  - id: "living_room_blind"
+    type: "Blind"
+
+sensors:
+  - id: "indoor_temp"
+    type: "IndoorTempSensor"
+  - id: "outdoor_temp"
+    type: "OutdoorTempSensor"
+  - id: "rain_sensor"
+    type: "RainSensor"
+  - id: "power_meter"
+    type: "PowerMeter"
