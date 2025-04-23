@@ -1,0 +1,37 @@
+Query: how many devices here?
+
+
+[Calling tool list_devices with args {}]
+1. living_room_ac
+
+Let me know if you'd like to control any of these devices or check their status.
+
+Query: how is the temperature of the ac in living room?
+
+
+[Calling tool get_device_status with args {'device_id': 'living_room_ac'}]
+
+
+
+The living room AC is currently off, last set to 26.0°C. Would you like me to turn it on or adjust the temperature?
+
+Query: turn on the air conditioner it's hot here.
+
+
+[Calling tool list_devices with args {}]
+
+
+
+<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>turn_on
+```json
+{"device_id":"living_room_ac"}
+```<｜tool▁call▁end｜><｜tool▁calls▁end｜>
+
+Query: turn on the aire conditioner in the living room
+
+
+[Calling tool switch_device with args {'device_id': 'living_room_ac', 'status': 'on'}]
+
+
+
+The air conditioner in the living room has been turned on.

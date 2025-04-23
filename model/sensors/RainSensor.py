@@ -1,4 +1,5 @@
 from model.base.Sensor import Sensor
+from model.Manager.SensorManager import SensorManager
 import random
 
 class RainSensor(Sensor):
@@ -9,6 +10,7 @@ class RainSensor(Sensor):
     def __init__(self, name: str):
         super().__init__(name)
         self.unit = "mm"
+        SensorManager.register_sensor(self)
 
     def read_value(self):
         """读取当前降雨量"""

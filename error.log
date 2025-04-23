@@ -1,8 +1,0 @@
-Traceback (most recent call last):
-  File "C:\Users\WHY\Documents\UNNC\Repository\Designing Intelligent Agents\Coursework\SmartHome\scripts\run_server.py", line 11, in <module>
-    from server.main import mcp
-  File "C:\Users\WHY\Documents\UNNC\Repository\Designing Intelligent Agents\Coursework\SmartHome\server\main.py", line 8, in <module>
-    from server import tools, resources
-  File "C:\Users\WHY\Documents\UNNC\Repository\Designing Intelligent Agents\Coursework\SmartHome\server\tools.py", line 11, in <module>
-    from server.main import mcp
-ImportError: cannot import name 'mcp' from partially initialized module 'server.main' (most likely due to a circular import) (C:\Users\WHY\Documents\UNNC\Repository\Designing Intelligent Agents\Coursework\SmartHome\server\main.py)

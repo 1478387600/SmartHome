@@ -1,160 +1,139 @@
-"""
-MCP 客户端主程序。
+import asyncio
 
-该模块负责连接本地 LLM 与 MCP Server，读取并解析 LLM 的响应（极简 JSON），调用对应的 MCP 工具或资源，并将结果展示给用户。
-
-作为本地LLM和MCP Server之间的桥梁
-解析LLM的JSON响应
-调用对应的MCP工具或资源
-提供交互式CLI界面
-"""
-
+from mcp.client.stdio import stdio_client
+from mcp import ClientSession, StdioServerParameters
 import json
 import asyncio
-from contextlib import AsyncExitStack
-import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from typing import Optional
+from contextlib import AsyncExitStack
 
-from client.parser import parse_llm_response
-from client.mcp_caller import init_mcp_client, call_tool, read_resource
+from openai import OpenAI
+from dotenv import load_dotenv
 
-# def load_llm_response_from_file(filepath: str) -> list[dict]:
-#     """
-#     从 JSON 文件中加载模拟的 LLM 响应列表。
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
 
-#     参数:
-#         filepath: JSON 文件路径
 
-#     返回:
-#         响应字典组成的列表
-#     """
-#     with open(filepath, 'r', encoding='utf-8') as f:
-#         return json.load(f)
+load_dotenv()
 
-async def handle_llm_response(session, response_dict: dict) -> str:
-    """
-    对单个 LLM 响应字典执行对应操作。
 
-    参数:
-        session: MCP ClientSession 实例
-        response_dict: 来自 LLM 的原始 JSON 响应
+class MCPClient:
+    def __init__(self):
+        self.session: Optional[ClientSession] = None
+        self.exit_stack = AsyncExitStack()
+        self.client = OpenAI()
 
-    返回:
-        操作结果字符串
-    """
-    try:
-        parsed = parse_llm_response(json.dumps(response_dict))
-        if parsed.type == "tool":
-            return await call_tool(session, parsed.name, parsed.arguments)
-        else:
-            return await read_resource(session, parsed.name)
-    except Exception as e:
-        return f"Error processing response: {str(e)}"
+    async def connect_to_server(self):
+        server_params = StdioServerParameters(
+            command='uv',
+            args=['run', 'server/app.py'],
+            env=None
+        )
 
-async def run_interactive_loop(session):
-    """
-    运行交互式 CLI 输入循环。
+        stdio_transport = await self.exit_stack.enter_async_context(
+            stdio_client(server_params))
+        stdio, write = stdio_transport
+        self.session = await self.exit_stack.enter_async_context(
+            ClientSession(stdio, write))
 
-    用户输入 LLM 响应 JSON 字符串，系统执行调用并展示结果。
-    """
-    print("Enter LLM response JSON (or 'exit' to quit):")
-    while True:
-        user_input = input("> ")
-        if user_input.lower() == 'exit':
-            break
-        try:
-            response = json.loads(user_input)
-            result = await handle_llm_response(session, response)
-            print(f"Result: {result}")
-        except Exception as e:
-            print(f"Error: {str(e)}")
+        await self.session.initialize()
 
-async def watch_instruction_file(session):
-    """监听指令队列文件变化"""
-    last_size = 0
-    while True:
-        try:
-            curr_size = os.path.getsize("data/instructions.queue")
-            if curr_size > last_size:
-                with open("data/instructions.queue", "r", encoding="utf-8") as f:
-                    f.seek(last_size)
-                    for line in f:
-                        try:
-                            instruction = json.loads(line.strip())
-                            result = await handle_llm_response(session, instruction)
-                            # 记录结果
-                            with open("data/results.json", "r+", encoding="utf-8") as res_file:
-                                results = json.load(res_file)
-                                print(f"🔄 Tool call result: {result}")  # 新增终端输出
-                                # Parse MCP response format to determine success
-                                is_success = "iserror=false" in result.lower()
-                                results[str(hash(line))] = {
-                                    "success": is_success,
-                                    "timestamp": datetime.now().isoformat(),
-                                    "status": "success" if is_success else "failed", 
-                                    "message": result
-                                }
-                                res_file.seek(0)
-                                json.dump(results, res_file, indent=2)
-                                print("✅ Result saved to results.json")  # 新增终端输出
-                        except json.JSONDecodeError:
-                            continue
-                last_size = curr_size
-        except FileNotFoundError:
-            pass
-        await asyncio.sleep(1)
+    async def process_query(self, query: str) -> str:
+        # 这里需要通过 system prompt 来约束一下大语言模型，
+        # 否则会出现不调用工具，自己乱回答的情况
+        system_prompt = (
+            "You are a smart home assistant. User queries are meant to control various home devices.\n"
+            "You MUST use provided tool functions to perform actions instead of answering directly.\n"
+            "Your available tools include: turning devices on/off, setting device parameters (brightness, curtain level, etc.), checking device status, and listing all devices.\n"
+            "Always preserve the full intent of the user query and respond with the appropriate tool call.\n"
+            "If the user mentions a specific device ID (e.g., bedroom_ac or kitchen_light), use the corresponding tool.\n"
+            "NEVER hardcode responses or insert specific time/status values—retrieve them via tool calls.\n"
+            "The user might say things like 'turn on living room TV', 'set bedroom AC to 24 degrees', or 'what’s the status of the kitchen light?'—you must respond by calling the correct function.\n"
+            "Do not lose user context. Preserve the full query meaning as much as possible."
+        )
 
-from datetime import datetime
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": query}
+        ]
 
-async def persistent_service():
-    """持久化服务主循环"""
-    async with AsyncExitStack() as stack:
-        # 初始化并保持MCP连接
-        session = await init_mcp_client("scripts/run_server.py", stack)
-        await session.initialize()
-        print("✅ MCP persistent connection established")
-        print("📁 Watching instruction queue file...")
+        # 获取所有 mcp 服务器 工具列表信息
+        response = await self.session.list_tools()
+        # 生成 function call 的描述信息
+        available_tools = [{
+            "type": "function",
+            "function": {
+                "name": tool.name,
+                "description": tool.description,
+                "input_schema": tool.inputSchema
+            }
+        } for tool in response.tools]
 
-        try:
-            await watch_instruction_file(session)
-        except asyncio.CancelledError:
-            print("🚦 Service shutdown requested")
-        except Exception as e:
-            print(f"⚠️ Error: {str(e)}")
+        # 请求 deepseek，function call 的描述信息通过 tools 参数传入
+        response = self.client.chat.completions.create(
+            model=os.getenv("OPENAI_MODEL"),
+            messages=messages,
+            tools=available_tools
+        )
 
-# async def get_llm_instruction() -> dict:
-#     """从LLM获取单条指令(模拟实现)"""
-#     # 实际生产环境替换为真正的LLM接口调用
-#     while True:
-#         try:
-#             data = input("Enter LLM instruction (or 'exit' to quit): ")
-#             if data.lower() == 'exit':
-#                 raise asyncio.CancelledError
-#             return json.loads(data)
-#         except json.JSONDecodeError as e:
-#             print(f"Invalid JSON format: {str(e)}")
-#             print("Example valid format:")
-#             print('{"text":"OK","type":"tool","name":"switch_device","arguments":{"device_id":"living_room_tv","status":"on"}}')
+        # 处理返回的内容
+        content = response.choices[0]
+        if content.finish_reason == "tool_calls":
+            # 如何是需要使用工具，就解析工具
+            tool_call = content.message.tool_calls[0]
+            tool_name = tool_call.function.name
+            tool_args = json.loads(tool_call.function.arguments)
 
+            # 执行工具
+            result = await self.session.call_tool(tool_name, tool_args)
+            print(f"\n\n[Calling tool {tool_name} with args {tool_args}]\n\n")
+
+            # 将 deepseek 返回的调用哪个工具数据和工具执行完成后的数据都存入messages中
+            messages.append(content.message.model_dump())
+            messages.append({
+                "role": "tool",
+                "content": result.content[0].text,
+                "tool_call_id": tool_call.id,
+            })
+
+            # 将上面的结果再返回给 deepseek 用于生产最终的结果
+            response = self.client.chat.completions.create(
+                model=os.getenv("OPENAI_MODEL"),
+                messages=messages,
+            )
+            return response.choices[0].message.content
+
+        return content.message.content
+
+    async def chat_loop(self):
+        while True:
+            try:
+                query = input("\nQuery: ").strip()
+
+                if query.lower() == 'quit':
+                    break
+
+                response = await self.process_query(query)
+                print("\n" + response)
+
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+
+    async def cleanup(self):
+        """Clean up resources"""
+        await self.exit_stack.aclose()
 async def main():
-    """启动持久化服务"""
+    client = MCPClient()
     try:
-        await persistent_service()
-    except KeyboardInterrupt:
-        print("\n🔴 Service stopped by user")
-    except Exception as e:
-        print(f"🔴 Unexpected error: {str(e)}")
+        await client.connect_to_server()
+        await client.chat_loop()
     finally:
-        await shutdown()
+        await client.cleanup()
 
-async def shutdown():
-    # 给资源一些时间关闭
-    await asyncio.sleep(0.1)
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    finally:
-        # 确保所有资源被清理
-        asyncio.run(shutdown())
+    import sys
+
+    asyncio.run(main())

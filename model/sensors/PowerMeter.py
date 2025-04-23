@@ -1,4 +1,5 @@
 from model.base.Sensor import Sensor
+from model.Manager.SensorManager import SensorManager
 import random
 
 class PowerMeter(Sensor):
@@ -9,6 +10,7 @@ class PowerMeter(Sensor):
     def __init__(self, name: str):
         super().__init__(name)
         self.unit = "W"
+        SensorManager.register_sensor(self)
 
     def read_value(self):
         """读取当前耗电量"""

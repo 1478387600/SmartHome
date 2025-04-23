@@ -1,4 +1,5 @@
 from model.base.Device import Device
+from model.Manager.DeviceManager import DeviceManager
 
 class AirConditioner(Device):
     """
@@ -9,6 +10,7 @@ class AirConditioner(Device):
         super().__init__(name)
         self.is_on = False
         self.temperature = 26.0  # Default temperature in °C
+        DeviceManager.register_device(self)
 
     def turn_on(self):
         """打开空调"""

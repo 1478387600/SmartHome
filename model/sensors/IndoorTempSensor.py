@@ -1,4 +1,5 @@
 from model.base.Sensor import Sensor
+from model.Manager.SensorManager import SensorManager
 import random
 
 class IndoorTempSensor(Sensor):
@@ -9,6 +10,7 @@ class IndoorTempSensor(Sensor):
     def __init__(self, name: str):
         super().__init__(name)
         self.unit = "°C"
+        SensorManager.register_sensor(self)
 
     def read_value(self):
         """读取当前室内温度"""

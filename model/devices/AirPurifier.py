@@ -1,4 +1,5 @@
 from model.base.Device import Device
+from model.Manager.DeviceManager import DeviceManager
 
 class AirPurifier(Device):
     """
@@ -8,6 +9,7 @@ class AirPurifier(Device):
     def __init__(self, name: str):
         super().__init__(name)
         self.is_on = False
+        DeviceManager.register_device(self)
 
     def turn_on(self):
         """打开空气净化器"""
