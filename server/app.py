@@ -110,7 +110,7 @@ def test_ping() -> str:
     return "pong"
 
 @mcp.tool()
-def get_device_status(device_id: str) -> dict:
+def get_status(device_id: str) -> dict:
     """
     获取设备状态
     

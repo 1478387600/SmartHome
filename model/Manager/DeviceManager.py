@@ -33,7 +33,7 @@ class DeviceManager:
     典型用法：
     >>> manager = DeviceManager()
     >>> manager.register_device(Light("living_room_light"))
-    >>> print(manager.get_device_status("living_room_light"))
+    >>> print(manager.get_status("living_room_light"))
     """
 
     _instance = None  # 单例实例存储
