@@ -25,7 +25,7 @@ class AirConditioner(Device):
         status = "on" if self.is_on else "off"
         return f"{status} at {self.temperature}°C"
 
-    def set_temperature(self, temp: float):
+    def set_level(self, temp: float):
         """设置空调温度"""
         if 16.0 <= temp <= 30.0:
             self.temperature = temp

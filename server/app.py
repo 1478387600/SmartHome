@@ -22,6 +22,7 @@
 import os
 import sys
 from pathlib import Path
+from typing import Optional
 
 # 将项目根目录添加到Python路径（注意：推荐使用包管理方式替代路径修改）
 sys.path.append(str(Path(__file__).parent.parent))
@@ -53,51 +54,50 @@ STATIC_RESOURCES = {
 # 初始化智能家居MCP服务实例
 mcp = FastMCP('smart-home')
 
+
 @mcp.tool()
-def switch_device(device_id: str, status: str) -> str:
+def control_device(device_id: str, status: str, level: Optional[int] = None) -> str:
     """
-    设备开关控制函数
+    设备控制函数，根据传入的状态控制设备的开关，并可选地设置设备的级别
 
     参数:
         device_id: 设备唯一标识符，需在设备注册表中存在
         status: 设备目标状态，"on"表示开启，"off"表示关闭
+        level: 设备运行参数值，范围0-100的整数百分比，仅在需要调节设备级别时使用
 
     返回:
-        str: 包含操作结果的格式化字符串，示例："Device light01 turned on"
+        str: 包含操作结果的格式化字符串，示例：
+            - "Device light01 turned on"
+            - "Device curtain02 set to 75%"
     """
     device = get_device_by_id(device_id)
+
+    # 处理设备开关状态
     if status == "on":
         device.turn_on()
-    else:
+        return f"Device {device_id} turned on"
+    elif status == "off":
         device.turn_off()
-    return f"Device {device_id} turned {status}"
+        return f"Device {device_id} turned off"
 
-@mcp.tool()
-def set_device_level(device_id: str, level: int) -> str:
-    """
-    设备数值调节函数
+    # 如果有 level 参数且设备支持调节级别，执行设置级别操作
+    if level is not None:
+        device.set_level(level)
+        return f"Device {device_id} set to {level}"
 
-    参数:
-        device_id: 支持级别控制的设备ID（如调光灯、窗帘电机等）
-        level: 设备运行参数值，范围0-100的整数百分比
+    return "Invalid status or level parameter"
 
-    返回:
-        str: 包含设置结果的格式化字符串，示例："Device curtain02 set to 75%"
-    """
-    device = get_device_by_id(device_id)
-    device.set_level(level)
-    return f"Device {device_id} set to {level}%"
 
-@mcp.tool()
-def list_devices() -> list[str]:
-    """
-    获取已注册设备清单
-
-    返回:
-        list[str]: 当前系统中所有注册设备的ID列表
-    """
-    from model.registry import list_all_devices
-    return list_all_devices()
+# @mcp.tool()
+# def list_devices() -> list[str]:
+#     """
+#     获取已注册设备清单
+#
+#     返回:
+#         list[str]: 当前系统中所有注册设备的ID列表
+#     """
+#     from model.registry import list_all_devices
+#     return list_all_devices()
 
 @mcp.tool()
 def test_ping() -> str:
