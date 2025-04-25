@@ -15,6 +15,8 @@ from model.sensors.IndoorTempSensor import IndoorTempSensor
 from model.sensors.OutdoorTempSensor import OutdoorTempSensor
 from model.sensors.PowerMeter import PowerMeter
 from model.sensors.RainSensor import RainSensor
+from model.base.Device import Device
+from model.base.Sensor import Sensor
 from model.Manager.DeviceManager import DeviceManager
 from model.Manager.SensorManager import SensorManager
 
@@ -75,17 +77,81 @@ def instantiate_home_devices():
     }
 
     register_table = {
-        "Devices":DeviceManager._devices.keys(),
-        "Sensors":SensorManager._sensors.keys()
+        "Devices":Device._devices.keys(),
+        "Sensors":Sensor._sensors.keys()
     }
+
+    # 生成资源文件
+    import json
+    from pathlib import Path
+    
+    resource_dir = Path(__file__).parent.parent/"server"/"resources"
+    resource_dir.mkdir(exist_ok=True)
+    
+    devices_data = {
+        "devices": [
+            {"id": d.name, "type": d.__class__.__name__, "status": d.get_status()} 
+            for d in Device._devices.values()
+        ]
+    }
+
+    with open(resource_dir/"devices.json", "w") as f:
+        json.dump(devices_data, f, indent=2)
+
+    sensors_data = {
+        "sensors": [
+            {"id": s.name, "type": s.__class__.__name__, "status": s.read_value()}
+            for s in Sensor._sensors.values()
+        ]
+    }
+    
+    with open(resource_dir/"sensors.json", "w") as f:
+        json.dump(sensors_data, f, indent=2)
 
     return [all_devices, register_table]
 
+
+from threading import Timer
+from datetime import datetime
+import json
+from pathlib import Path
+
+def update_sensor_status():
+    sensor_file = Path("server/resources/sensors.json")
+    temp_file = sensor_file.with_suffix(".tmp")
+    
+    try:
+        # 收集传感器状态
+        sensor_data = {
+            "timestamp": datetime.now().isoformat(),
+            "sensors": [{
+                "id": s.name,
+                "status": s.get_status(),
+                "type": s.__class__.__name__
+            } for s in Sensor._sensors.values()]
+        }
+        
+        # 两阶段写入
+        with open(temp_file, "w") as f:
+            json.dump(sensor_data, f, indent=2)
+        
+        temp_file.replace(sensor_file)
+        print(f"[{datetime.now():%H:%M:%S}] 成功更新{len(sensor_data['sensors'])}个传感器状态")
+        
+    except Exception as e:
+        print(f"[{datetime.now():%H:%M:%S}] 更新失败: {str(e)}")
+    finally:
+        if temp_file.exists():
+            temp_file.unlink(missing_ok=True)
+        
+    # 5秒后再次执行
+    Timer(5.0, update_sensor_status).start()
 
 class Simulator:
     def __init__(self):
         print("模拟器启动成功！")
         instantiate_home_devices()
+        update_sensor_status()
 
 
 def main():

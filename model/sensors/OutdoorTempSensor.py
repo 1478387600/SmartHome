@@ -12,6 +12,10 @@ class OutdoorTempSensor(Sensor):
         self.unit = "°C"
         SensorManager.register_sensor(self)
 
+    def get_status(self) -> float:
+        """获取当前室外温度(实现基类抽象方法)"""
+        return round(random.uniform(-10.0, 40.0), 1)  # -10-40°C随机温度
+
     def read_value(self):
-        """读取当前室外温度"""
-        return round(random.uniform(-10.0, 40.0), 1)  # Random temp between -10-40°C
+        """兼容旧接口"""
+        return self.get_status()

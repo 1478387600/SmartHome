@@ -19,6 +19,7 @@
 - mcp.server: MCP 服务框架
 - model.registry: 设备注册表管理"""
 
+import os
 import sys
 from pathlib import Path
 
@@ -27,10 +28,27 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 # 服务核心组件
 import mcp.types as types
+from mcp.types import Resource, FileUrl
 from mcp.server import FastMCP
 from mcp.server.models import InitializationOptions
+import json
 from model.registry import get_device_by_id
 from environment.simulator import instantiate_home_devices
+
+RESOURCE_DIR = os.path.join(os.path.dirname(__file__), "resources")
+# 预定义资源清单
+STATIC_RESOURCES = {
+    "devices": {
+        "name": "Device List",
+        "desc": "预注册设备清单",
+        "path": "server/resources/devices.json"
+    },
+    "sensors": {
+        "name": "Sensor List", 
+        "desc": "传感器实时状态",
+        "path": "server/resources/sensors.json"
+    }
+}
 
 # 初始化智能家居MCP服务实例
 mcp = FastMCP('smart-home')
@@ -150,9 +168,56 @@ def get_device_status(device_id: str) -> dict:
         "timestamp": datetime.now().isoformat()
     }
 
+
+@mcp.resource("file://devices")
+async def list_resources() -> list[Resource]:
+    """返回所有已注册资源的元数据并读取文件内容"""
+    resources = []
+    for res_id, info in STATIC_RESOURCES.items():
+        # 读取文件内容
+        file_path = Path(__file__).parent / 'resources' / f'{res_id}.json'
+        with open(file_path, 'r', encoding='utf-8') as file:
+            file_content = json.load(file)
+
+        resources.append(
+            Resource(
+                uri=FileUrl(f"file://{file_path}"),
+                name=info["name"],
+                description=info["desc"],
+                mime_type="application/json",
+                file_path=file_path.resolve(),
+                content=file_content  # 返回文件内容
+            )
+        )
+    return resources
+
+
+def add_resources():
+    # 添加设备资源，确保路径指向具体文件
+    devices_resource = Resource(
+        uri="file://resources/devices.json",  # 使用完整的 URI 路径
+        path=Path(__file__).parent / "resources" / "devices.json",  # 使用 Path 动态构建文件路径
+        mime_type="application/json",
+        name="Device List",
+        description="预注册设备清单"
+    )
+    mcp.add_resource(devices_resource)
+
+    # 添加传感器资源，确保路径指向具体文件
+    sensors_resource = Resource(
+        uri="file://resources/sensors.json",  # 使用完整的 URI 路径
+        path=Path(__file__).parent / "resources" / "sensors.json",  # 使用 Path 动态构建文件路径
+        mime_type="application/json",
+        name="Sensor List",
+        description="传感器实时状态",
+        refresh_interval=5  # 5秒刷新间隔
+    )
+    mcp.add_resource(sensors_resource)
+
 # 主入口：使用标准输入输出作为通信通道启动MCP服务
 if __name__ == "__main__":
     print(instantiate_home_devices())
+    add_resources()
     # 启动MCP服务
     mcp.run(transport='stdio')
     print("MCP server subprocess launched.")

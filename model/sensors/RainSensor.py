@@ -12,6 +12,10 @@ class RainSensor(Sensor):
         self.unit = "mm"
         SensorManager.register_sensor(self)
 
+    def get_status(self) -> float:
+        """获取当前降雨量(实现基类抽象方法)"""
+        return round(random.uniform(0.0, 10.0), 1)  # 0-10mm随机降雨量
+
     def read_value(self):
-        """读取当前降雨量"""
-        return round(random.uniform(0.0, 10.0), 1)  # Random rainfall between 0-10mm
+        """兼容旧接口"""
+        return self.get_status()

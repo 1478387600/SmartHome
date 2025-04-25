@@ -12,6 +12,10 @@ class PowerMeter(Sensor):
         self.unit = "W"
         SensorManager.register_sensor(self)
 
+    def get_status(self) -> int:
+        """获取当前耗电量(实现基类抽象方法)"""
+        return random.randint(100, 5000)  # 100-5000W随机功率
+
     def read_value(self):
-        """读取当前耗电量"""
-        return random.randint(100, 5000)  # Random power between 100-5000W
+        """兼容旧接口"""
+        return self.get_status()
