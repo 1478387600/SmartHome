@@ -5,7 +5,8 @@ from typing import List, Dict, Any
 
 from .base import BaseStrategy
 from ..llm import ChatEngine, MODEL_FILE
-
+from ..speech.tts import TTSModule
+from ..speech.asr import ASRModule
 
 class LocalLLMStrategy(BaseStrategy):
     """
@@ -18,14 +19,20 @@ class LocalLLMStrategy(BaseStrategy):
     def __init__(self, mcp):
         super().__init__(mcp)
         self.engine = ChatEngine(MODEL_FILE)
+        self.tts = TTSModule()
+        self.asr = ASRModule()
 
     async def chat_loop(self) -> None:
         print("💬 进入本地 LLM 对话循环 (quit 退出)")
         while True:
-            query = input("\nQuery: ")
+            # query = input("\nQuery: ")
+            print("🎙️正在监听... ")
+            # 自动开始监听
+            # query = self.asr.listen_and_transcribe()
+            query = self.asr.transcribe_mic(chunk_length_s=5)
+            print(f"📝监听结果: {query} ")
             if query.lower() == "quit":
                 break
-            print(f'{query}')
             await self._single_round(query)
 
     # ----------------- helpers -----------------
@@ -39,10 +46,12 @@ class LocalLLMStrategy(BaseStrategy):
     async def _single_round(self, query: str) -> None:
         reply = self.engine.ask(query)      # <-- 同步返回 str     
         payload = self._safe_json(reply)
+        self.tts.speak(payload)
 
         # 情形 A：模型直接给自然语言
         if not payload or payload.get("type") != "tool":
             print("\n🔊 回复：", reply)
+            self.tts.speak(payload)
             return
 
         # 情形 B：需要调工具
@@ -52,4 +61,5 @@ class LocalLLMStrategy(BaseStrategy):
 
         # 把工具返回再丢回模型，让它生成最终答复
         follow_up = self.engine.ask(result)
+        self.tts.speak(payload)
         print("\n🔊 回复：", follow_up)

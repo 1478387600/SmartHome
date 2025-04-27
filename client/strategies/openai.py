@@ -8,6 +8,8 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 from .base import BaseStrategy
+from speech.tts import TTSModule
+from speech.asr import ASRModule
 
 load_dotenv()
 
@@ -17,6 +19,8 @@ class OpenAIStrategy(BaseStrategy):
         super().__init__(mcp)
         self.client = OpenAI()
         self.model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        self.tts = TTSModule()
+        self.asr = ASRModule()
 
     # --------- 内部辅助 ---------
     async def _build_messages(
@@ -50,7 +54,11 @@ class OpenAIStrategy(BaseStrategy):
     async def chat_loop(self) -> None:
         print("💬 进入对话循环 (quit 退出)")
         while True:
-            query = input("\nQuery: ").strip()
+            # query = input("\nQuery: ").strip()
+            print("🎙️正在监听... ")
+            # 自动开始监听
+            query = self.asr.listen_and_transcribe()  # 自动监听并转化为文字
+            print(f"📝监听结果: {query} ")
             if query.lower() == "quit":
                 break
             await self._single_round(query)
@@ -102,5 +110,6 @@ class OpenAIStrategy(BaseStrategy):
                 model=self.model, messages=messages
             )
             choice = resp.choices[0]
+            self.tts.speak(choice)
 
         print("\n🔊 回复：", choice.message.content)
