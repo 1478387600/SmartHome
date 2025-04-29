@@ -5,12 +5,16 @@ import math
 import numpy as np
 import time
 import sys
-from astar_path import a_star
+import asyncio
+from environment.astar_path import a_star
+from environment.draw_appliances import draw_appliances, update_appliance_status
+from server.runner import main as server
 import os
 import pygame
 pygame.mixer.init()
 
 image_cache = {}  # Global dictionary to store images
+drawable_devices = []
 
 class Brain():
     def __init__(self, botp):
@@ -44,7 +48,7 @@ class Brain():
                     countWV += 1
             if countWV != 0:
                 self.dangerThreshold = sumWV / countWV
-                print("Vision training complete. Danger threshold:", self.dangerThreshold)
+                # print("Vision training complete. Danger threshold:", self.dangerThreshold)
         elif self.time > trainingTime:
             if any(c > self.dangerThreshold for c in camera):
                 dangerDetected = True
@@ -226,9 +230,9 @@ class Bot():
 
     # Create by NattapongNEADTIP_20717335
     def reactToDanger(self, agents):
-        print("dangerous situation")
-        sound_path = os.path.join(os.path.dirname(__file__), "436589.wav")
-        pygame.mixer.Sound(sound_path).play()
+        # print("dangerous situation")
+        # sound_path = os.path.join(os.path.dirname(__file__), "436589.wav")
+        # pygame.mixer.Sound(sound_path).play()
 
         for ag in agents:
             if isinstance(ag,Cat):
@@ -475,8 +479,8 @@ class Bot():
         for rr in agents:
             if isinstance(rr,Cat):
                 if self.distanceTo(rr)<50.0:
-                    sound_path = os.path.join(os.path.dirname(__file__), "385892.wav")
-                    pygame.mixer.Sound(sound_path).play()
+                    # sound_path = os.path.join(os.path.dirname(__file__), "385892.wav")
+                    # pygame.mixer.Sound(sound_path).play()
                     collision = True
                     rr.jump()
 
@@ -679,9 +683,70 @@ class Counter:
                         tags="dirtCount", font=("Arial", 20, "bold"), fill="darkgreen")
 
 
+def start_client_local():
+    """Start the client in a thread-safe way"""
+    from client.runners.run_local import main as run_local
+    import asyncio
+    
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    if loop.is_running():
+        asyncio.run_coroutine_threadsafe(run_local(), loop)
+    else:
+        import threading
+        def run_loop():
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(run_local())
+        
+        thread = threading.Thread(target=run_loop, daemon=True)
+        thread.start()
+
+def start_client_api():
+    """Start the client in a thread-safe way"""
+    from client.runners.run_api import main as run_api
+    import asyncio
+    
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    if loop.is_running():
+        asyncio.run_coroutine_threadsafe(run_api(), loop)
+    else:
+        import threading
+        def run_loop():
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(run_api())
+        
+        thread = threading.Thread(target=run_loop, daemon=True)
+        thread.start()
+
+
 def initialise(window):
     window.resizable(False,False)
-    canvas = tk.Canvas(window,width=1200,height=720)
+    
+    # Create main frame
+    main_frame = tk.Frame(window)
+    main_frame.pack(fill=tk.BOTH, expand=True)
+
+    # Add control buttons frame
+    button_frame = tk.Frame(main_frame)
+    button_frame.pack(side=tk.TOP, fill=tk.X)
+    
+    # Add client buttons
+    client_btn1 = tk.Button(button_frame, text="Local LLM", command=start_client_local)
+    client_btn1.pack(side=tk.LEFT, padx=5, pady=5)
+    
+    client_btn2 = tk.Button(button_frame, text="Online API", command=start_client_api)
+    client_btn2.pack(side=tk.LEFT, padx=5, pady=5)
+
+    canvas = tk.Canvas(main_frame, width=1500, height=700)
     canvas.pack()
     return canvas
 
@@ -693,9 +758,11 @@ def buttonClicked(x, y, agents):
             rr.brain.path_a = []
             rr.brain.goalReached = None
 
-def createObjects(canvas,noOfBots,noOfLights,amountOfDirt,noOfCats):
+def createObjects(canvas,noOfBots,noOfLights,amountOfDirt,noOfCats, appliances):
     agents = []
     passiveObjects = []
+
+    drawable_devices = draw_appliances(canvas, image_cache, appliances)
 
     for i in range(0,noOfCats):
         cat = Cat("Cat"+str(i),canvas)
@@ -738,7 +805,6 @@ def createObjects(canvas,noOfBots,noOfLights,amountOfDirt,noOfCats):
         passiveObjects.append(dirt)
         dirt.draw(canvas)
 
-
     wall1 = Walls("Wall1", x=600, y=90, width=1200, height=20)
     wall2 = Walls("Wall2", x=600, y=710, width=1200, height=20)
     wall3 = Walls("Wall3", x=10, y=500, width=20, height=800)
@@ -763,7 +829,7 @@ def createObjects(canvas,noOfBots,noOfLights,amountOfDirt,noOfCats):
     
     return agents, passiveObjects, count
 
-def moveIt(canvas,agents,passiveObjects,count,moves, timeOfDirt, draw_cam_line):
+def moveIt(canvas,agents,passiveObjects,count,moves, timeOfDirt, draw_cam_line, appliances):
     for rr in agents:
         rr.thinkAndAct(agents,passiveObjects,canvas)
         rr.update(canvas,passiveObjects,1.0)
@@ -781,7 +847,7 @@ def moveIt(canvas,agents,passiveObjects,count,moves, timeOfDirt, draw_cam_line):
     if draw_cam_line:
         drawAllCameraLines(canvas, agents)
 
-    canvas.after(20,moveIt,canvas,agents,passiveObjects,count,moves, timeOfDirt, draw_cam_line)
+    canvas.after(20,moveIt,canvas,agents,passiveObjects,count,moves, timeOfDirt, draw_cam_line, appliances)
 
 # Adapt code from lab session
 # Create by NattapongNEADTIP_20717335
@@ -820,6 +886,12 @@ def avoidRobots(canvas, listOfRobots, dt=1.0):
     # Schedule next update
     canvas.after(20, avoidRobots, canvas, listOfRobots, dt)
 
+def update_appliances_display(canvas, appliances):
+    """Update display of all appliances every 2 seconds"""
+    # draw_appliances(canvas, image_cache, appliances)
+    update_appliance_status(canvas, appliances, drawable_devices)
+    canvas.after(2000, update_appliances_display, canvas, appliances)
+
 def drawGrid(canvas, rows=12, cols=20, canvas_width=1200, canvas_height=720):
     cell_width = canvas_width // cols
     cell_height = canvas_height // rows
@@ -855,16 +927,19 @@ def drawAllCameraLines(canvas, agents):
                 canvas.create_line(cam_x, cam_y, cam_x + 200 * math.cos(angle), cam_y + 200 * math.sin(angle), fill="light grey", tags="view")
 
 
-def main(noOfBots=1, noOfCats=1, amountOfDirt=1000, timeOfDirt = 1000, draw_cam_line =False, draw_grid=False):
+def sim_main(noOfBots=1, noOfCats=1, amountOfDirt=1000, timeOfDirt = 1000, draw_cam_line =False, draw_grid=False, appliances=None):
     window = tk.Toplevel()
     canvas = initialise(window)
     agents, passiveObjects, count = createObjects(canvas,
                                                   noOfBots=noOfBots,
                                                   noOfLights=0,
                                                   amountOfDirt=amountOfDirt,
-                                                  noOfCats=noOfCats)
+                                                  noOfCats=noOfCats,
+                                                  appliances=appliances)
     
     canvas.agents = agents
+    print("Starting home appliance simulation...")
+    
     
     if draw_cam_line:
         drawAllCameraLines(canvas, agents)
@@ -872,9 +947,7 @@ def main(noOfBots=1, noOfCats=1, amountOfDirt=1000, timeOfDirt = 1000, draw_cam_
     if draw_grid:
         drawGrid(canvas)
 
-    moveIt(canvas, agents, passiveObjects, count, 0, timeOfDirt=timeOfDirt, draw_cam_line=draw_cam_line)
+    moveIt(canvas, agents, passiveObjects, count, 0, timeOfDirt=timeOfDirt, draw_cam_line=draw_cam_line, appliances=appliances)
+    update_appliances_display(canvas, appliances)  # Start the periodic updates
     robotList = [a for a in agents if isinstance(a, Bot)]
     avoidRobots(canvas, robotList)
-
-
-

@@ -1,5 +1,6 @@
 # client/strategies/openai_strategy.py
 import os
+import sys
 import json
 import asyncio
 from typing import List, Dict, Any, Optional
@@ -8,8 +9,8 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 from .base import BaseStrategy
-from speech.tts import TTSModule
-from speech.asr import ASRModule
+from client.speech.tts import TTSModule
+from client.speech.asr import ASRModule
 
 load_dotenv()
 
@@ -34,12 +35,14 @@ class OpenAIStrategy(BaseStrategy):
             "If you still want to call the tools, set the finish_reason='tool_calls'.\n"
             "If you are calling a tool in your response while the finish_reason='stop', change it to finish_reason='tool_calls'.\n"
             "If your response is based on tool calls, make sure put all the calls into one response and set the finish_reason='tool_calls'.\n"
+            "If you set the finish_reason='tool_calls', don't make tool_calls.\n"
             "Your response can not be an answer before you have done all the tool calls need to finish your task given by user."
             "Put multiple tasks in one response using several tool calls.\n"
             "If the user mentions a specific device ID (e.g., bedroom_ac or kitchen_light), use the corresponding tool.\n"
             "NEVER hardcode responses or insert specific time/status values—retrieve them via tool calls.\n"
             "The user might say things like 'turn on living room TV', 'set bedroom AC to 24 degrees', or 'what’s the status of the kitchen light?'—you must respond by calling the correct function.\n"
             "For those devices can be set the values, you put all the arguments in one function call. for example {'device_id': 'living_room_ac', 'status': 'on', 'level': 20} \n"
+            "You don't need to call the "
             "Do not lose user context. Preserve the full query meaning as much as possible.\n"
             "available tools and devices are below\n"
             f"{json.dumps(tools, ensure_ascii=False)}\n"
@@ -54,28 +57,34 @@ class OpenAIStrategy(BaseStrategy):
     async def chat_loop(self) -> None:
         print("💬 进入对话循环 (quit 退出)")
         while True:
-            # query = input("\nQuery: ").strip()
+            query = input("\nQuery: ").strip()
             print("🎙️正在监听... ")
             # 自动开始监听
-            query = self.asr.listen_and_transcribe()  # 自动监听并转化为文字
+            # query = self.asr.listen_and_transcribe()  # 自动监听并转化为文字
+            # query = self.asr.transcribe_mic(chunk_length_s=5)
             print(f"📝监听结果: {query} ")
             if query.lower() == "quit":
                 break
             await self._single_round(query)
 
     async def _single_round(self, query: str) -> None:
+        # 获取工具列表和设备、传感器信息
         tools = await self.mcp.list_tools()
         devices, sensors = await self.mcp.read_devices()
+        
+        # 构建消息
         messages = await self._build_messages(query, tools, devices, sensors)
-        # messages = self._build_messages(query, tools, devices, sensors)
+        print(f"messages:\n{messages}")
 
-        # 第一次 call LLM
+        # 第一次调用 LLM
         resp = self.client.chat.completions.create(
             model=self.model,
             messages=messages,
             tools=[{"type": "function", "function": t} for t in tools],
         )
         choice = resp.choices[0]
+
+        # 如果需要进行工具调用
         if choice.finish_reason == "tool_calls":
             tool_calls = choice.message.tool_calls  # 获取工具调用列表
             messages.append({
@@ -90,12 +99,13 @@ class OpenAIStrategy(BaseStrategy):
                 } for tool_call in tool_calls]
             })
 
-        # 如果需要工具调用
+        # 进入工具调用处理循环
         while choice.finish_reason == "tool_calls":
             tool_calls = choice.message.tool_calls
             for tc in tool_calls:
                 args = json.loads(tc.function.arguments)
                 print(f"📞 调用 {tc.function.name} {args}")
+                # 调用对应的工具
                 result = await self.mcp.call_tool(tc.function.name, args)
                 messages.append(
                     {
@@ -104,12 +114,22 @@ class OpenAIStrategy(BaseStrategy):
                         "tool_call_id": tc.id,
                     }
                 )
+            print(f"result:\n{result}")
 
-            # 再问一次 LLM
+            # print(f"devices, sensors:\n{devices, sensors}")
+            # 再次调用 LLM
             resp = self.client.chat.completions.create(
                 model=self.model, messages=messages
             )
             choice = resp.choices[0]
-            self.tts.speak(choice)
+            print(f"choice:\n{choice}")
 
-        print("\n🔊 回复：", choice.message.content)
+            # 检查 LLM 是否还需要调用工具
+            if choice.finish_reason == "tool_calls":
+                continue  # 如果有工具调用，继续循环处理
+            
+            # 语音合成：确保传递的是字符串类型
+            if 'message' in choice and hasattr(choice.message, 'content'):
+                self.tts.speak(choice.message.content)  # 正确访问 content 进行 TTS 语音合成
+
+        print("\n🔊 回复：", choice.message.content)  # 打印最终的回复内容

@@ -10,7 +10,7 @@ class RainSensor(Sensor):
     def __init__(self, name: str):
         super().__init__(name)
         self.unit = "mm"
-        SensorManager.register_sensor(self)
+        # SensorManager.register_sensor(self)
 
     def get_status(self) -> float:
         """获取当前降雨量(实现基类抽象方法)"""

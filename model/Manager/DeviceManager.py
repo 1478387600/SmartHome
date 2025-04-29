@@ -61,8 +61,8 @@ class DeviceManager:
         异常：
             ValueError: 当设备名称已存在时抛出
         """
-        if device.name in cls._devices:
-            raise ValueError(f"Device {device.name} already registered")
+        # if device.name in cls._devices:
+        #     raise ValueError(f"Device {device.name} already registered")
         cls._devices[device.name] = device
 
     @classmethod

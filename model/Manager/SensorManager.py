@@ -60,8 +60,8 @@ class SensorManager:
         异常：
             ValueError: 当传感器名称已存在时抛出
         """
-        if sensor.name in cls._sensors:
-            raise ValueError(f"Sensor {sensor.name} already registered")
+        # if sensor.name in cls._sensors:
+        #     raise ValueError(f"Sensor {sensor.name} already registered")
         cls._sensors[sensor.name] = sensor
 
     @classmethod

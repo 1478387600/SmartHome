@@ -10,7 +10,7 @@ class PowerMeter(Sensor):
     def __init__(self, name: str):
         super().__init__(name)
         self.unit = "W"
-        SensorManager.register_sensor(self)
+        # SensorManager.register_sensor(self)
 
     def get_status(self) -> int:
         """获取当前耗电量(实现基类抽象方法)"""

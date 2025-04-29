@@ -9,7 +9,7 @@ class AirPurifier(Device):
     def __init__(self, name: str):
         super().__init__(name)
         self.is_on = False
-        DeviceManager.register_device(self)
+        # DeviceManager.register_device(self)
 
     def turn_on(self):
         """打开空气净化器"""

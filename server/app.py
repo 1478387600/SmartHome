@@ -22,7 +22,9 @@
 import os
 import sys
 from pathlib import Path
+import threading
 from typing import Optional
+import argparse
 
 # 将项目根目录添加到Python路径（注意：推荐使用包管理方式替代路径修改）
 sys.path.append(str(Path(__file__).parent.parent))
@@ -34,7 +36,8 @@ from mcp.server import FastMCP
 from mcp.server.models import InitializationOptions
 import json
 from model.registry import get_device_by_id
-from environment.simulator import instantiate_home_devices
+# from environment.home_simulator import HomeSimulator
+
 
 RESOURCE_DIR = os.path.join(os.path.dirname(__file__), "resources")
 # 预定义资源清单
@@ -70,8 +73,18 @@ def control_device(device_id: str, status: str, level: Optional[int] = None) -> 
             - "Device light01 turned on"
             - "Device curtain02 set to 75%"
     """
+    file_path = os.path.join(os.getcwd(), "output.txt")
+    content = "entered control_device()"
+    with open(file_path, "w", encoding="utf-8") as file:
+        file.write(content)
+
     device = get_device_by_id(device_id)
 
+    file_path = os.path.join(os.getcwd(), "output.txt")
+    content = "entered control_device()"
+    with open(file_path, "w", encoding="utf-8") as file:
+        file.write(content)
+    
     # 处理设备开关状态
     if status == "on":
         device.turn_on()
@@ -216,8 +229,11 @@ def add_resources():
 
 # 主入口：使用标准输入输出作为通信通道启动MCP服务
 if __name__ == "__main__":
-    print(instantiate_home_devices())
-    add_resources()
-    # 启动MCP服务
+    # from .runner import main
+
+    # simulator = HomeSimulator()
+    # appliances = simulator.instantiate_devices()
+    # simulator.start()
+
+    print("launching MCP server subprocess ...")
     mcp.run(transport='stdio')
-    print("MCP server subprocess launched.")

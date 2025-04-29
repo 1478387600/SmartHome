@@ -10,7 +10,7 @@ class AirConditioner(Device):
         super().__init__(name)
         self.is_on = False
         self.temperature = 26.0  # Default temperature in °C
-        DeviceManager.register_device(self)
+        # DeviceManager.register_device(self)
 
     def turn_on(self):
         """打开空调"""

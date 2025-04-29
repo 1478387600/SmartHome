@@ -9,7 +9,7 @@ class Blind(Device):
     def __init__(self, name: str):
         super().__init__(name)
         self.level = 0  # 0-100 percentage
-        DeviceManager.register_device(self)
+        # DeviceManager.register_device(self)
 
     def turn_on(self):
         """打开百叶窗（设置为100%）"""

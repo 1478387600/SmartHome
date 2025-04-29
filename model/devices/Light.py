@@ -9,7 +9,7 @@ class Light(Device):
     def __init__(self, name: str):
         super().__init__(name)
         self.brightness = 0  # 0-100 percentage
-        DeviceManager.register_device(self)
+        # DeviceManager.register_device(self)
 
     def turn_on(self):
         """打开灯（默认设置为50%亮度）"""
