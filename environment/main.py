@@ -6,7 +6,7 @@ import tkinter as tk
 import subprocess
 import threading
 import asyncio
-from simulator import main
+from .simulator import main
 
 # Add project root to Python path
 sys.path.append(str(Path(__file__).parent.parent))
@@ -111,6 +111,6 @@ class Home:
         except Exception as e:
             messagebox.showerror("Input Error", f"Unexpected error: {str(e)}")
 
-mainWindow = tk.Tk()
-my_system = Home(mainWindow)
-mainWindow.mainloop()
+# mainWindow = tk.Tk()
+# my_system = Home(mainWindow)
+# mainWindow.mainloop()
