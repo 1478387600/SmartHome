@@ -7,7 +7,7 @@ import time
 import sys
 import asyncio
 from environment.astar_path import a_star
-from environment.draw_appliances import draw_appliances, update_appliance_status
+from environment.draw_appliances import  update_appliance_status
 from server.runner import main as server
 import os
 import pygame
@@ -750,19 +750,70 @@ def initialise(window):
     canvas.pack()
     return canvas
 
-def buttonClicked(x, y, agents):
+def buttonClicked(x, y, agents, canvas, appliances):
     for rr in agents:
         if isinstance(rr, Bot):
             rr.x = x
             rr.y = y
             rr.brain.path_a = []
             rr.brain.goalReached = None
+    draw_appliances(canvas, image_cache, appliances)
+
+def draw_appliances(canvas, image_cache, appliances):
+    canvas.delete("appliance_status")
+    devices, sensors = appliances
+
+    # 加载家电和传感器图片
+    device_images = {
+        'ac': "environment/images/ac.png",
+        'purifier': "environment/images/purifier.png",
+        'curtain': "environment/images/curtain.png",
+        'blind': "environment/images/blind.png",
+        'light': "environment/images/light.png",
+        'tv': "environment/images/tv.png",
+        'window': "environment/images/window.png",
+        'temp': "environment/images/temp.png",
+        'power': "environment/images/power.png",
+        'rain': "environment/images/rain.png"
+    }
+
+    # 加载并缓存图片
+    for name, path in device_images.items():
+        if name not in image_cache:
+            img = Image.open(path).resize((50, 50))
+            image_cache[name] = ImageTk.PhotoImage(img)
+
+    # 设备位置映射
+    positions = {
+        'living_room_ac': (1250, 100, 'ac'),
+        'bedroom_ac': (1250, 140, 'ac'),
+        'main_purifier': (1250, 180, 'purifier'),
+        'living_room_curtain': (1250, 220, 'curtain'),
+        'kitchen_blind': (1250, 260, 'blind'),
+        'kitchen_light': (1250, 300, 'light'),
+        'bedroom_light': (1250, 340, 'light'),
+        'hallway_light': (1250, 380, 'light'),
+        'living_room_tv': (1250, 420, 'tv'),
+        'bathroom_window': (1250, 460, 'window'),
+        'bedroom_window': (1250, 520, 'window'),
+        'indoor_temp_sensor': (1250, 560, 'temp'),
+        'outdoor_temp_sensor': (1250, 600, 'temp'),
+        'main_power_meter': (1250, 640, 'power'),
+        'rain_sensor': (1250, 680, 'rain')
+    }
+
+    # 绘制所有设备
+    for device in devices + sensors:
+        if device.name in positions:
+            x, y, img_key = positions[device.name]
+            device.draw(canvas, x, y, image_cache[img_key])
+
 
 def createObjects(canvas,noOfBots,noOfLights,amountOfDirt,noOfCats, appliances):
     agents = []
     passiveObjects = []
 
-    drawable_devices = draw_appliances(canvas, image_cache, appliances)
+    draw_appliances(canvas, image_cache, appliances)
 
     for i in range(0,noOfCats):
         cat = Cat("Cat"+str(i),canvas)
@@ -825,7 +876,7 @@ def createObjects(canvas,noOfBots,noOfLights,amountOfDirt,noOfCats, appliances):
         agents.append(bot)
         bot.draw(canvas)
     
-    canvas.bind( "<Button-1>", lambda event: buttonClicked(event.x,event.y,agents) )
+    canvas.bind( "<Button-1>", lambda event: buttonClicked(event.x,event.y,agents, canvas,appliances) )
     
     return agents, passiveObjects, count
 

@@ -36,7 +36,7 @@ from mcp.server import FastMCP
 from mcp.server.models import InitializationOptions
 import json
 from model.registry import get_device_by_id
-# from environment.home_simulator import HomeSimulator
+from environment.home_simulator import HomeSimulator
 
 
 RESOURCE_DIR = os.path.join(os.path.dirname(__file__), "resources")
@@ -231,8 +231,8 @@ def add_resources():
 if __name__ == "__main__":
     # from .runner import main
 
-    # simulator = HomeSimulator()
-    # appliances = simulator.instantiate_devices()
+    simulator = HomeSimulator()
+    appliances = simulator.instantiate_devices()
     # simulator.start()
 
     print("launching MCP server subprocess ...")

@@ -5,7 +5,7 @@ import math
 import numpy as np
 import time
 import sys
-from astar_path import a_star
+from environment.astar_path import a_star
 import os
 import pygame
 pygame.mixer.init()
