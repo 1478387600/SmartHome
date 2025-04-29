@@ -114,3 +114,6 @@ class Home:
 # mainWindow = tk.Tk()
 # my_system = Home(mainWindow)
 # mainWindow.mainloop()
+# mainWindow = tk.Tk()
+# my_system = Home(mainWindow)
+# mainWindow.mainloop()
