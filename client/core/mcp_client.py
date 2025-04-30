@@ -29,18 +29,23 @@ class MCPClient:
     @asynccontextmanager
     async def session(self) -> AsyncIterator["MCPClient"]:
         """用 `async with MCPClient().session() as cli:` 打开会话"""
-        # 建立 stdio transport
+        print("建立 stdio transport")
         stdio, write = await self._stack.enter_async_context(
             stdio_client(self._server_params)
         )
-        # 构造 ClientSession
+        print("stdio transport 成功建立")
+        
+        print("构造 ClientSession")
         self._session = await self._stack.enter_async_context(
             ClientSession(stdio, write)
         )
         await self._session.initialize()
+        print("ClientSession 初始化完成")
+        
         try:
-            yield self
+            yield self  # 返回 MCPClient 实例
         finally:
+            print("关闭会话")
             await self._stack.aclose()
 
     # ---------- 原子操作 ----------

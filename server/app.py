@@ -18,25 +18,86 @@
 - mcp.types: MCP 类型定义
 - mcp.server: MCP 服务框架
 - model.registry: 设备注册表管理"""
-
+import multiprocessing
 import os
+import subprocess
 import sys
+from multiprocessing import Pipe
 from pathlib import Path
 import threading
 from typing import Optional
 import argparse
 
+# from environment.home_simulator import HomeSimulator
+
 # 将项目根目录添加到Python路径（注意：推荐使用包管理方式替代路径修改）
 sys.path.append(str(Path(__file__).parent.parent))
 
 # 服务核心组件
-import mcp.types as types
+# import mcp.types as types
 from mcp.types import Resource, FileUrl
 from mcp.server import FastMCP
 from mcp.server.models import InitializationOptions
 import json
 from model.registry import get_device_by_id
-from environment.home_simulator import HomeSimulator
+
+from model.devices.AirConditioner import AirConditioner
+from model.devices.AirPurifier import AirPurifier
+from model.devices.Blind import Blind
+from model.devices.Curtain import Curtain
+from model.devices.Light import Light
+from model.devices.TV import TV
+from model.devices.Window import Window
+from model.sensors.IndoorTempSensor import IndoorTempSensor
+from model.sensors.OutdoorTempSensor import OutdoorTempSensor
+from model.sensors.PowerMeter import PowerMeter
+from model.sensors.RainSensor import RainSensor
+
+
+# 从标准输入接收 appliances_data（JSON 格式）
+# input_data = sys.stdin.read()  # 读取管道传输的全部数据
+with open(r'server\resources\mock_appliances_init.txt', 'r', encoding='utf-8') as file:
+    input_data = file.read().strip()  # 读取并去除首尾的空白字符
+print(input_data,type(input_data))
+if input_data:
+    appliances_data = json.loads(input_data)
+else:
+    appliances_data = []
+
+
+# 反序列化 appliances 数据并根据设备类型创建相应的设备实例
+appliances = []
+for data in appliances_data:
+    print(f"data: {data} {type(data)}")
+    device_type = data["type"]  # 获取设备类型
+    if device_type == "AirConditioner":
+        appliance = AirConditioner.from_dict(data)
+    elif device_type == "AirPurifier":
+        appliance = AirPurifier.from_dict(data)
+    elif device_type == "Blind":
+        appliance = Blind.from_dict(data)
+    elif device_type == "Curtain":
+        appliance = Curtain.from_dict(data)
+    elif device_type == "Light":
+        appliance = Light.from_dict(data)
+    elif device_type == "TV":
+        appliance = TV.from_dict(data)
+    elif device_type == "Window":
+        appliance = Window.from_dict(data)
+    elif device_type == "IndoorTempSensor":
+        appliance = IndoorTempSensor.from_dict(data)
+    elif device_type == "OutdoorTempSensor":
+        appliance = OutdoorTempSensor.from_dict(data)
+    elif device_type == "PowerMeter":
+        appliance = PowerMeter.from_dict(data)
+    elif device_type == "RainSensor":
+        appliance = RainSensor.from_dict(data)
+    else:
+        # 如果类型无法识别，跳过或报错
+        print(f"Unrecognized device type: {device_type}")
+        continue
+
+    appliances.append(appliance)
 
 
 RESOURCE_DIR = os.path.join(os.path.dirname(__file__), "resources")
@@ -73,16 +134,12 @@ def control_device(device_id: str, status: str, level: Optional[int] = None) -> 
             - "Device light01 turned on"
             - "Device curtain02 set to 75%"
     """
-    file_path = os.path.join(os.getcwd(), "output.txt")
-    content = "entered control_device()"
-    with open(file_path, "w", encoding="utf-8") as file:
-        file.write(content)
 
     device = get_device_by_id(device_id)
 
     file_path = os.path.join(os.getcwd(), "output.txt")
     content = "entered control_device()"
-    with open(file_path, "w", encoding="utf-8") as file:
+    with open(file_path, "a", encoding="utf-8") as file:
         file.write(content)
     
     # 处理设备开关状态
@@ -227,13 +284,70 @@ def add_resources():
     )
     mcp.add_resource(sensors_resource)
 
+# def initialize_environment(args):
+#     # 创建 HomeSimulator 实例并实例化设备
+#     simulator = HomeSimulator()
+#     appliances = simulator.instantiate_devices()
+#
+#     # 将 appliances 列表中的每个设备实例转换为字典
+#     appliances_data = [device.to_dict() for device in appliances[0]]  # 假设设备有 to_dict 方法
+#
+#     # 使用 multiprocessing 启动两个进程
+#
+#     # 进程 2: 启动 sim_main()
+#     sim_process = multiprocessing.Process(target=sim_main_process, args=(args, appliances_data))
+#     sim_process.start()
+#
+#     # 等待进程完成
+#     sim_process.join()
+#
+# def sim_main_process(args, appliances_data):
+#     from environment.simulator_with_appliance import sim_main
+#     numOfRobots, numOfCats, amountOfDirt, timeOfDirt, drawCamLine, drawGrid = args
+#     sim_main(numOfRobots, numOfCats, amountOfDirt, timeOfDirt, drawCamLine, drawGrid, appliances_data)
+
+
+def start_server():
+    # 启动 server/app.py
+    process = subprocess.Popen(
+        ["python", "server/app.py"],
+        stdin=subprocess.PIPE,  # 管道输入
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE
+    )
+
+
+    # 要传递的设备数据（示例）
+    devices_data = []
+    for device in appliances:
+        devices_data.append(device.to_dict())
+
+    # 将设备数据转为 JSON 格式并通过管道传输
+    json_data = json.dumps(devices_data)
+    process.stdin.write(json_data.encode())  # 写入数据
+    process.stdin.flush()
+
+    # 获取子进程输出（如果有）
+    output = process.stdout.read().decode()
+    print(output)
+
+    # 等待进程结束
+    process.wait()
+
+def main():
+    print("launching MCP server subprocess ...")
+    mcp.run(transport='stdio')
+
 # 主入口：使用标准输入输出作为通信通道启动MCP服务
 if __name__ == "__main__":
     # from .runner import main
 
-    simulator = HomeSimulator()
-    appliances = simulator.instantiate_devices()
+    # simulator = HomeSimulator()
+    # appliances = simulator.instantiate_devices()
     # simulator.start()
+    # args = [1,1,1,3000,False,False]
+    # initialize_environment(args)
 
-    print("launching MCP server subprocess ...")
-    mcp.run(transport='stdio')
+    # print("launching MCP server subprocess ...")
+    # mcp.run(transport='stdio')
+    main()

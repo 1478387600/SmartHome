@@ -17,15 +17,11 @@ def get_device_by_id(name: str) -> Device:
     """按名称获取设备"""
     device_manager = DeviceManager()
     # print(f"device: {device_manager._devices[name]}")
-    # 定义文件路径
-    file_path = os.path.join(os.getcwd(), "output.txt")
 
-    # 要写入的内容
-    content = device_manager._devices[name]
-
-    # 打开文件并写入内容
-    with open(file_path, "w", encoding="utf-8") as file:
-        file.write(content)
+    # file_path = os.path.join(os.getcwd(), "output.txt")
+    # content = device_manager._devices[name]
+    # with open(file_path, "a", encoding="utf-8") as file:
+    #     file.write(content)
 
     return device_manager._devices[name]
 

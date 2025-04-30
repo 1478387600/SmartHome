@@ -6,11 +6,21 @@ class Light(Device):
     灯光设备类，支持亮度百分比控制。
     """
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, brightness=0):
         super().__init__(name)
-        self.brightness = 0  # 0-100 percentage
-        # DeviceManager.register_device(self)
+        self.brightness = brightness  # 0-100 percentage
+        DeviceManager.register_device(self)
 
+    def to_dict(self):
+        data = super().to_dict()  # 调用基类的 to_dict
+        data["brightness"] = self.brightness
+        return data
+
+    @classmethod
+    def from_dict(cls, data):
+        instance = super().from_dict(data)  # 调用基类的 from_dict
+        instance.brightness = data["brightness"]
+        return instance
     def turn_on(self):
         """打开灯（默认设置为50%亮度）"""
         self.brightness = 50 if self.brightness == 0 else self.brightness

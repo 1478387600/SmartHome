@@ -1,17 +1,36 @@
 from abc import ABC, abstractmethod
 
+WIDTH = 50
+HEIGHT = 50
+
 class Sensor(ABC):
     """
     所有传感器类型的抽象基类。
     """
     _sensors = {}
 
-    def __init__(self, name: str, width=50, height=50):
+    def __init__(self, name: str, width=WIDTH, height=HEIGHT, **kwargs):
         self.name = name
         self.width = width
         self.height = height
         self.__class__._sensors[name] = self
         self._canvas_items = {}  # 记录canvas上画的元素，方便后续更新
+        self._kwargs = kwargs
+
+    def to_dict(self):
+        """将设备对象转换为字典"""
+        return {
+            "name": self.name,
+            "type": self.__class__.__name__  # 添加设备类型信息，以便于识别
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        """根据字典数据重建设备对象"""
+        # 使用字典中的数据构造设备实例
+        instance = cls(data["name"], **{k: v for k, v in data.items() if k not in ["name","type"]})
+        return instance
+
 
     @abstractmethod
     def read_value(cls, device_id: str):

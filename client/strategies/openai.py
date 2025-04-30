@@ -23,7 +23,7 @@ class OpenAIStrategy(BaseStrategy):
         self.tts = TTSModule()
         self.asr = ASRModule()
 
-    # --------- 内部辅助 ---------
+    # --------- Internal Helpers ---------
     async def _build_messages(
         self, query: str, tools: List[Dict[str, Any]], devices: List[dict], sensors: List[dict]
     ) -> List[Dict[str, Any]]:
@@ -53,30 +53,30 @@ class OpenAIStrategy(BaseStrategy):
             {"role": "user", "content": query},
         ]
 
-    # --------- 对话主循环 ---------
+    # --------- Main Conversation Loop ---------
     async def chat_loop(self) -> None:
-        print("💬 进入对话循环 (quit 退出)")
+        print("💬 Entering conversation loop (type quit to exit)")
         while True:
-            query = input("\nQuery: ").strip()
-            print("🎙️正在监听... ")
-            # 自动开始监听
+            # query = input("\nQuery: ").strip()
+            print("🎙️ Listening... ")
+            # Automatic start of listening
             # query = self.asr.listen_and_transcribe()  # 自动监听并转化为文字
-            # query = self.asr.transcribe_mic(chunk_length_s=5)
-            print(f"📝监听结果: {query} ")
+            query = self.asr.transcribe_mic(chunk_length_s=5)
+            print(f"📝 Listening result: {query} ")
             if query.lower() == "quit":
                 break
             await self._single_round(query)
 
     async def _single_round(self, query: str) -> None:
-        # 获取工具列表和设备、传感器信息
+        # Get tool list and device, sensor information
         tools = await self.mcp.list_tools()
         devices, sensors = await self.mcp.read_devices()
         
-        # 构建消息
+        # Building a Message
         messages = await self._build_messages(query, tools, devices, sensors)
         print(f"messages:\n{messages}")
 
-        # 第一次调用 LLM
+        # First call to LLM
         resp = self.client.chat.completions.create(
             model=self.model,
             messages=messages,
@@ -84,9 +84,9 @@ class OpenAIStrategy(BaseStrategy):
         )
         choice = resp.choices[0]
 
-        # 如果需要进行工具调用
+        # If a tool call is needed
         if choice.finish_reason == "tool_calls":
-            tool_calls = choice.message.tool_calls  # 获取工具调用列表
+            tool_calls = choice.message.tool_calls  # Get a list of tool calls
             messages.append({
                 "role": "assistant",
                 "tool_calls": [{
@@ -99,13 +99,13 @@ class OpenAIStrategy(BaseStrategy):
                 } for tool_call in tool_calls]
             })
 
-        # 进入工具调用处理循环
+        # Enter tool call processing loop
         while choice.finish_reason == "tool_calls":
             tool_calls = choice.message.tool_calls
             for tc in tool_calls:
                 args = json.loads(tc.function.arguments)
-                print(f"📞 调用 {tc.function.name} {args}")
-                # 调用对应的工具
+                print(f"📞 Calling {tc.function.name} {args}")
+                # Call the corresponding tool
                 result = await self.mcp.call_tool(tc.function.name, args)
                 messages.append(
                     {
@@ -117,19 +117,19 @@ class OpenAIStrategy(BaseStrategy):
             print(f"result:\n{result}")
 
             # print(f"devices, sensors:\n{devices, sensors}")
-            # 再次调用 LLM
+            # Call LLM again
             resp = self.client.chat.completions.create(
                 model=self.model, messages=messages
             )
             choice = resp.choices[0]
             print(f"choice:\n{choice}")
 
-            # 检查 LLM 是否还需要调用工具
+            # Check if LLM still needs to invoke tools
             if choice.finish_reason == "tool_calls":
-                continue  # 如果有工具调用，继续循环处理
+                continue  # If there is a tool call, continue to loop
             
-            # 语音合成：确保传递的是字符串类型
+            # Text To Speech: Make sure you pass string type
             if 'message' in choice and hasattr(choice.message, 'content'):
-                self.tts.speak(choice.message.content)  # 正确访问 content 进行 TTS 语音合成
+                self.tts.speak(choice.message.content)  # Access content correctly for TTS Text To Speech
 
-        print("\n🔊 回复：", choice.message.content)  # 打印最终的回复内容
+        print("\n🔊 Response:", choice.message.content)  # Print final response

@@ -1,3 +1,8 @@
+import json
+import multiprocessing
+import subprocess
+import threading
+
 from PIL import Image, ImageTk
 import tkinter as tk
 import random
@@ -7,14 +12,19 @@ import time
 import sys
 import asyncio
 from environment.astar_path import a_star
-from environment.draw_appliances import  update_appliance_status
-from server.runner import main as server
+from environment.draw_appliances import update_appliance_status
 import os
 import pygame
+
+from environment.home_simulator import HomeSimulator
+
 pygame.mixer.init()
 
 image_cache = {}  # Global dictionary to store images
 drawable_devices = []
+
+appliances = []
+
 
 class Brain():
     def __init__(self, botp):
@@ -30,7 +40,7 @@ class Brain():
 
     def thinkAndAct(self, lightL, lightR, chargerL, chargerR, x, y, sl, sr, battery, camera, collision):
         dangerDetected = False
-  
+
         # Danger learning phase
         trainingTime = 1000
         if self.time < trainingTime:
@@ -60,8 +70,7 @@ class Brain():
         newX = None
         newY = None
 
-
-        current_cell = (int(x // 60), int(y // 60))     # Create by NattapongNEADTIP_20717335
+        current_cell = (int(x // 60), int(y // 60))  # Create by NattapongNEADTIP_20717335
 
         # Create by NattapongNEADTIP_20717335
         # If the robot is in the goal position
@@ -70,20 +79,20 @@ class Brain():
             self.path_a = []
             self.goalReached = None
             return 0.0, 0.0, None, None, dangerDetected, True
-        
+
         # Create by NattapongNEADTIP_20717335
         # When the robot have a low battery or full collected dirt.
         if (self.bot.battery < 3000 or self.bot.collectedDirt > 150) and not self.path_a:
             grid = self.bot.map()
             start = (int(self.bot.x // 60), int(self.bot.y // 60))
             goals = [(1, 5), (3, 10), (5, 2), (12, 10), (15, 2), (18, 6)]
-            
+
             self.path_a, self.goalReached = a_star(grid, start, goals)
 
         # Follow A* path
         # Create by NattapongNEADTIP_20717335
         if self.path_a and (self.bot.battery < 3000 or self.bot.collectedDirt > 150):
-        
+
             targetGrid = self.path_a[0]
             target = [targetGrid[0] * 60 + 30, targetGrid[1] * 60 + 30]
 
@@ -130,9 +139,9 @@ class Brain():
                 self.movingCount = random.randrange(50, 100)
                 self.currentlyTurning = False
 
-        completed = self.path_a and len(self.path_a) == 0   # Create by NattapongNEADTIP_20717335
+        completed = self.path_a and len(self.path_a) == 0  # Create by NattapongNEADTIP_20717335
 
-        if chargerL + chargerR > 1000 and battery < 10000 :
+        if chargerL + chargerR > 1000 and battery < 10000:
             speedLeft = 0.0
             speedRight = 0.0
 
@@ -141,14 +150,14 @@ class Brain():
 
 class Bot():
 
-    def __init__(self,namep,canvasp, passiveObjectsp,counterp):
+    def __init__(self, namep, canvasp, passiveObjectsp, counterp):
         self.name = namep
         self.canvas = canvasp
-        self.x = random.randint(60,1100)
-        self.y = random.randint(150,650)
-        self.theta = random.uniform(0.0,2.0*math.pi)
+        self.x = random.randint(60, 1100)
+        self.y = random.randint(150, 650)
+        self.theta = random.uniform(0.0, 2.0 * math.pi)
         #self.theta = 0
-        self.ll = 60 #axle width
+        self.ll = 60  #axle width
         self.sl = 0.0
         self.sr = 0.0
         self.battery = 10000
@@ -157,7 +166,6 @@ class Bot():
 
         self.passiveObjects = passiveObjectsp
         self.counter = counterp
- 
 
     def thinkAndAct(self, agents, passiveObjects, canvas):
         lightL, lightR = self.senseLight(passiveObjects)
@@ -169,15 +177,15 @@ class Bot():
         # Wall avoidance check
         if wallAhead:
             #print(f"{self.name} detected wall – avoiding")
-            self.theta = random.uniform(0.0,2.0*math.pi)
+            self.theta = random.uniform(0.0, 2.0 * math.pi)
             self.sl = 2.0
             self.sr = -2.0
             return
 
-        self.sl, self.sr, xx, yy, dangerDetected, completed = self.brain.thinkAndAct\
+        self.sl, self.sr, xx, yy, dangerDetected, completed = self.brain.thinkAndAct \
             (lightL, lightR, chargerL, chargerR, self.x, self.y, \
              self.sl, self.sr, self.battery, view, collision)
-        
+
         if (dangerDetected):
             self.reactToDanger(agents)
 
@@ -188,8 +196,8 @@ class Bot():
 
         if completed:
             return
-        
-    def setBrain(self,brainp):
+
+    def setBrain(self, brainp):
         self.brain = brainp
 
     # Create by NattapongNEADTIP_20717335
@@ -213,11 +221,9 @@ class Bot():
             grid[12, 10] = 1
             grid[15, 2] = 1
             grid[18, 6] = 1
-            
 
             self.cached_grid = grid
         return self.cached_grid
-
 
     def senseWalls(self, passiveObjects, buffer=0):
         for pos in self.cameraPositions:
@@ -235,11 +241,10 @@ class Bot():
         # pygame.mixer.Sound(sound_path).play()
 
         for ag in agents:
-            if isinstance(ag,Cat):
+            if isinstance(ag, Cat):
                 distance = self.distanceTo(ag)
                 if distance < 70:  # jump only if the cat is within 60 pixels
                     ag.jump(big=True)
-
 
     def look(self, canvas, agents):
         self.view = [0] * 30
@@ -301,12 +306,12 @@ class Bot():
         lightL = 0.0
         lightR = 0.0
         for pp in passiveObjects:
-            if isinstance(pp,Lamp):
-                lx,ly = pp.getLocation()
-                distanceL = math.sqrt((lx-self.x)**2 + (ly-self.y)**2)
+            if isinstance(pp, Lamp):
+                lx, ly = pp.getLocation()
+                distanceL = math.sqrt((lx - self.x) ** 2 + (ly - self.y) ** 2)
                 distanceR = distanceL
-                lightL += 200000/(distanceL**2)
-                lightR += 200000/(distanceR**2)
+                lightL += 200000 / (distanceL ** 2)
+                lightR += 200000 / (distanceR ** 2)
         return lightL, lightR
 
     # returns sensors values that detect chargers
@@ -314,24 +319,24 @@ class Bot():
         chargerL = 0.0
         chargerR = 0.0
         for pp in passiveObjects:
-            if isinstance(pp,Charger):
-                lx,ly = pp.getLocation()
-                distanceL = math.sqrt((lx-self.x)**2 + (ly-self.y)**2)
+            if isinstance(pp, Charger):
+                lx, ly = pp.getLocation()
+                distanceL = math.sqrt((lx - self.x) ** 2 + (ly - self.y) ** 2)
                 distanceR = distanceL
-                chargerL += 200000/(distanceL**2)
-                chargerR += 200000/(distanceR**2)
+                chargerL += 200000 / (distanceL ** 2)
+                chargerR += 200000 / (distanceR ** 2)
         return chargerL, chargerR
 
-    def distanceTo(self,obj):
-        xx,yy = obj.getLocation()
-        return math.sqrt( math.pow(self.x-xx,2) + math.pow(self.y-yy,2))
+    def distanceTo(self, obj):
+        xx, yy = obj.getLocation()
+        return math.sqrt(math.pow(self.x - xx, 2) + math.pow(self.y - yy, 2))
 
-    def distance(self,otherRobot):
-        return math.sqrt( (self.x-otherRobot.x)*(self.x-otherRobot.x) + \
-                          (self.y-otherRobot.y)*(self.y-otherRobot.y) )
+    def distance(self, otherRobot):
+        return math.sqrt((self.x - otherRobot.x) * (self.x - otherRobot.x) + \
+                         (self.y - otherRobot.y) * (self.y - otherRobot.y))
 
     # what happens at each timestep
-    def update(self,canvas,passiveObjects,dt):
+    def update(self, canvas, passiveObjects, dt):
         # for now, the only thing that changes is that the robot moves
         #   (using the current settings of self.sl and self.sr)
         if self.battery > 3000:
@@ -341,7 +346,7 @@ class Bot():
             self.battery -= 1
 
         for rr in passiveObjects:
-            if isinstance(rr,Charger) and self.distanceTo(rr)<40:
+            if isinstance(rr, Charger) and self.distanceTo(rr) < 40:
                 self.battery += 25
                 if self.collectedDirt > 0:
                     self.collectedDirt -= 1
@@ -351,13 +356,13 @@ class Bot():
                 if self.battery >= 10000:
                     self.battery = 10000
 
-        if self.battery<=0:
+        if self.battery <= 0:
             self.battery = 0
 
-        self.move(canvas,dt)
+        self.move(canvas, dt)
 
     # draws the robot at its current position
-    def draw(self,canvas):
+    def draw(self, canvas):
 
         radius = 30  # Radius of the circular robot body
 
@@ -365,7 +370,7 @@ class Bot():
         self.cameraPositions = []
         num_cameras = 30
         arc_start = -math.pi / 3  # -60 degrees
-        arc_end = math.pi / 3     # +60 degrees
+        arc_end = math.pi / 3  # +60 degrees
         for i in range(num_cameras):
             angle_offset = arc_start + i * (arc_end - arc_start) / (num_cameras - 1)
             angle = self.theta + angle_offset
@@ -373,38 +378,42 @@ class Bot():
             cam_y = self.y + radius * math.sin(angle)
             self.cameraPositions.append((cam_x, cam_y))
             canvas.create_oval(cam_x - 2, cam_y - 2, cam_x + 2, cam_y + 2, fill="purple1", tags=self.name)
-            
 
         # Draw circular robot body
-        canvas.create_oval(self.x - radius, self.y - radius, self.x + radius, self.y + radius, fill="blue", tags=self.name)
+        canvas.create_oval(self.x - radius, self.y - radius, self.x + radius, self.y + radius, fill="blue",
+                           tags=self.name)
 
         # Display battery level
         #canvas.create_text(self.x, self.y, text=str(self.battery), tags=self.name, fill="white", font="bold")
         canvas.create_text(self.x, self.y, text=str(self.battery), tags=self.name, fill="white", font="bold")
-        canvas.create_text(self.x, self.y + 18, text=self.collectedDirt, tags=self.name, fill="yellow", font=("Arial", 12))
+        canvas.create_text(self.x, self.y + 18, text=self.collectedDirt, tags=self.name, fill="yellow",
+                           font=("Arial", 12))
 
         if self.collectedDirt >= 150:
-            canvas.create_text(self.x, self.y - 15, text="Full", tags=self.name, fill="coral", font=("Arial", 10, "bold"))
+            canvas.create_text(self.x, self.y - 15, text="Full", tags=self.name, fill="coral",
+                               font=("Arial", 10, "bold"))
         elif self.battery <= 3000:
-            canvas.create_text(self.x, self.y - 15, text="Low", tags=self.name, fill="yellow", font=("Arial", 10, "bold"))
-        
+            canvas.create_text(self.x, self.y - 15, text="Low", tags=self.name, fill="yellow",
+                               font=("Arial", 10, "bold"))
+
         # Wheel markers
         wheel_offset_angle = math.pi / 2
         left_wheel_x = self.x + radius * math.cos(self.theta + wheel_offset_angle)
         left_wheel_y = self.y + radius * math.sin(self.theta + wheel_offset_angle)
         right_wheel_x = self.x + radius * math.cos(self.theta - wheel_offset_angle)
         right_wheel_y = self.y + radius * math.sin(self.theta - wheel_offset_angle)
-        canvas.create_oval(left_wheel_x-3, left_wheel_y-3, left_wheel_x+3, left_wheel_y+3, fill="red", tags=self.name)
-        canvas.create_oval(right_wheel_x-3, right_wheel_y-3, right_wheel_x+3, right_wheel_y+3, fill="yellow", tags=self.name)
-    
+        canvas.create_oval(left_wheel_x - 3, left_wheel_y - 3, left_wheel_x + 3, left_wheel_y + 3, fill="red",
+                           tags=self.name)
+        canvas.create_oval(right_wheel_x - 3, right_wheel_y - 3, right_wheel_x + 3, right_wheel_y + 3, fill="yellow",
+                           tags=self.name)
 
         # light sensors around the robot
         self.sensorPositions = []
         num_sensors = 8
         sensor_radius = 30
 
-        wheel_angles = [(self.theta + math.pi / 2) % (2 * math.pi),     # left wheel angle
-                        (self.theta - math.pi / 2) % (2 * math.pi)]     # right wheel angle
+        wheel_angles = [(self.theta + math.pi / 2) % (2 * math.pi),  # left wheel angle
+                        (self.theta - math.pi / 2) % (2 * math.pi)]  # right wheel angle
 
         for i in range(num_sensors):
             angle = (self.theta + i * (2 * math.pi / num_sensors)) % (2 * math.pi)
@@ -420,8 +429,8 @@ class Bot():
 
     # handles the physics of the movement
     # cf. Dudek and Jenkin, Computational Principles of Mobile Robotics
-    def move(self,canvas,dt):
-        if self.battery==0:
+    def move(self, canvas, dt):
+        if self.battery == 0:
             self.sl = 0
             self.sr = 0
 
@@ -444,7 +453,7 @@ class Bot():
 
             # Rotation matrix update
             m = np.array([[math.cos(omega * dt), -math.sin(omega * dt), 0],
-                          [math.sin(omega * dt),  math.cos(omega * dt), 0],
+                          [math.sin(omega * dt), math.cos(omega * dt), 0],
                           [0, 0, 1]])
 
             v1 = np.array([[self.x - ICCx], [self.y - ICCy], [self.theta]])
@@ -460,53 +469,52 @@ class Bot():
 
         self.look(canvas, canvas.agents)
 
-
     def collectDirt(self, canvas, passiveObjects, count):
         toDelete = []
-        for idx,rr in enumerate(passiveObjects):
-            if isinstance(rr,Dirt):
-                if self.distanceTo(rr)<30:
+        for idx, rr in enumerate(passiveObjects):
+            if isinstance(rr, Dirt):
+                if self.distanceTo(rr) < 30:
                     canvas.delete(rr.name)
                     toDelete.append(idx)
                     count.itemCollected(canvas)
                     self.collectedDirt += 1
-        for ii in sorted(toDelete,reverse=True):
+        for ii in sorted(toDelete, reverse=True):
             del passiveObjects[ii]
         return passiveObjects
 
-    def collision(self,agents):
+    def collision(self, agents):
         collision = False
         for rr in agents:
-            if isinstance(rr,Cat):
-                if self.distanceTo(rr)<50.0:
+            if isinstance(rr, Cat):
+                if self.distanceTo(rr) < 50.0:
                     # sound_path = os.path.join(os.path.dirname(__file__), "385892.wav")
                     # pygame.mixer.Sound(sound_path).play()
                     collision = True
                     rr.jump()
 
         return collision
-    
+
+
 class Cat:
-    def __init__(self,namep,canvasp):
-        self.x = random.randint(100,900)
-        self.y = random.randint(150,600)
-        self.theta = random.uniform(0.0,2.0*math.pi)
+    def __init__(self, namep, canvasp):
+        self.x = random.randint(100, 900)
+        self.y = random.randint(150, 600)
+        self.theta = random.uniform(0.0, 2.0 * math.pi)
         self.name = namep
         self.canvas = canvasp
         self.vl = 1.0
         self.vr = 1.0
         self.turning = 0
-        self.moving = random.randrange(50,100)
+        self.moving = random.randrange(50, 100)
         self.currentlyTurning = False
         self.ll = 20
         imgFile = Image.open("environment\cat.png")
-        imgFile = imgFile.resize((30,30), Image.LANCZOS)
+        imgFile = imgFile.resize((30, 30), Image.LANCZOS)
         self.image = ImageTk.PhotoImage(imgFile)
         image_cache["cat"] = self.image  # Prevent garbage collection by storing globally
-    
-        
-    def draw(self,canvas):
-        body = canvas.create_image(self.x,self.y,image=self.image,tags=self.name)
+
+    def draw(self, canvas):
+        body = canvas.create_image(self.x, self.y, image=self.image, tags=self.name)
 
     def getLocation(self):
         return self.x, self.y
@@ -515,14 +523,14 @@ class Cat:
 
         if self.detectWall(passiveObjects):
             #print(f"{self.name} avoiding wall")
-            self.theta = random.uniform(0.0,2.0*math.pi)
+            self.theta = random.uniform(0.0, 2.0 * math.pi)
             self.vl = 1.0
             self.vr = 1.0
             return
-        
+
         else:
             # wandering behaviour
-            if self.currentlyTurning==True:
+            if self.currentlyTurning == True:
                 self.vl = -2.0
                 self.vr = 2.0
                 self.turning -= 1
@@ -530,40 +538,40 @@ class Cat:
                 self.vl = 1.0
                 self.vr = 1.0
                 self.moving -= 1
-            if self.moving==0 and not self.currentlyTurning:
-                self.turning = random.randrange(20,40)
+            if self.moving == 0 and not self.currentlyTurning:
+                self.turning = random.randrange(20, 40)
                 self.currentlyTurning = True
-            if self.turning==0 and self.currentlyTurning:
-                self.moving = random.randrange(50,100)
+            if self.turning == 0 and self.currentlyTurning:
+                self.moving = random.randrange(50, 100)
                 self.currentlyTurning = False
 
-    def update(self,canvas,passiveObjects,dt):
-        self.move(canvas,dt)
-            
-    def move(self,canvas,dt):
-        if self.vl==self.vr:
+    def update(self, canvas, passiveObjects, dt):
+        self.move(canvas, dt)
+
+    def move(self, canvas, dt):
+        if self.vl == self.vr:
             R = 0
         else:
-            R = (self.ll/2.0)*((self.vr+self.vl)/(self.vl-self.vr))
-        omega = (self.vl-self.vr)/self.ll
-        ICCx = self.x-R*math.sin(self.theta) #instantaneous centre of curvature
-        ICCy = self.y+R*math.cos(self.theta)
-        m = np.matrix( [ [math.cos(omega*dt), -math.sin(omega*dt), 0], \
-                        [math.sin(omega*dt), math.cos(omega*dt), 0],  \
-                        [0,0,1] ] )
-        v1 = np.matrix([[self.x-ICCx],[self.y-ICCy],[self.theta]])
-        v2 = np.matrix([[ICCx],[ICCy],[omega*dt]])
-        newv = np.add(np.dot(m,v1),v2)
+            R = (self.ll / 2.0) * ((self.vr + self.vl) / (self.vl - self.vr))
+        omega = (self.vl - self.vr) / self.ll
+        ICCx = self.x - R * math.sin(self.theta)  #instantaneous centre of curvature
+        ICCy = self.y + R * math.cos(self.theta)
+        m = np.matrix([[math.cos(omega * dt), -math.sin(omega * dt), 0], \
+                       [math.sin(omega * dt), math.cos(omega * dt), 0], \
+                       [0, 0, 1]])
+        v1 = np.matrix([[self.x - ICCx], [self.y - ICCy], [self.theta]])
+        v2 = np.matrix([[ICCx], [ICCy], [omega * dt]])
+        newv = np.add(np.dot(m, v1), v2)
         newX = newv.item(0)
         newY = newv.item(1)
         newTheta = newv.item(2)
-        newTheta = newTheta%(2.0*math.pi) #make sure angle doesn't go outside [0.0,2*pi)
+        newTheta = newTheta % (2.0 * math.pi)  #make sure angle doesn't go outside [0.0,2*pi)
         self.x = newX
         self.y = newY
-        self.theta = newTheta        
-        if self.vl==self.vr: # straight line movement
-            self.x += self.vr*math.cos(self.theta) #vr wlog
-            self.y += self.vr*math.sin(self.theta)
+        self.theta = newTheta
+        if self.vl == self.vr:  # straight line movement
+            self.x += self.vr * math.cos(self.theta)  #vr wlog
+            self.y += self.vr * math.sin(self.theta)
 
         canvas.delete(self.name)
         self.draw(canvas)
@@ -595,7 +603,7 @@ class Cat:
         #self.updateMap()
         self.canvas.delete(self.name)
         self.draw(self.canvas)
-        
+
     def detectWall(self, passiveObjects):
         # Simple bounding box overlap check
         for obj in passiveObjects:
@@ -608,50 +616,50 @@ class Cat:
 
 
 class Lamp():
-    def __init__(self,namep):
-        self.centreX = random.randint(400,600)
-        self.centreY = random.randint(360,540)
+    def __init__(self, namep):
+        self.centreX = random.randint(400, 600)
+        self.centreY = random.randint(360, 540)
         self.name = namep
-        
-    def draw(self,canvas):
-        body = canvas.create_oval(self.centreX-10,self.centreY-10, \
-                                  self.centreX+10,self.centreY+10, \
-                                  fill="yellow",tags=self.name)
+
+    def draw(self, canvas):
+        body = canvas.create_oval(self.centreX - 10, self.centreY - 10, \
+                                  self.centreX + 10, self.centreY + 10, \
+                                  fill="yellow", tags=self.name)
 
     def getLocation(self):
         return self.centreX, self.centreY
-    
+
 
 class Charger():
-    def __init__(self,namep, xc, yc):
+    def __init__(self, namep, xc, yc):
         self.centreX = xc
         self.centreY = yc
         self.name = namep
-        
-    def draw(self,canvas):
-        body = canvas.create_oval(self.centreX-10,self.centreY-10, \
-                                  self.centreX+10,self.centreY+10, \
-                                  fill="red",tags=self.name)
+
+    def draw(self, canvas):
+        body = canvas.create_oval(self.centreX - 10, self.centreY - 10, \
+                                  self.centreX + 10, self.centreY + 10, \
+                                  fill="red", tags=self.name)
 
     def getLocation(self):
         return self.centreX, self.centreY
-    
+
 
 class Dirt:
-    def __init__(self,namep):
-        self.centreX = random.randint(30,1170)
-        self.centreY = random.randint(120,690)
+    def __init__(self, namep):
+        self.centreX = random.randint(30, 1170)
+        self.centreY = random.randint(120, 690)
         self.name = namep
 
-    def draw(self,canvas):
-        body = canvas.create_oval(self.centreX-1,self.centreY-1, \
-                                  self.centreX+1,self.centreY+1, \
-                                  fill="grey",tags=self.name)
+    def draw(self, canvas):
+        body = canvas.create_oval(self.centreX - 1, self.centreY - 1, \
+                                  self.centreX + 1, self.centreY + 1, \
+                                  fill="grey", tags=self.name)
 
     def getLocation(self):
         return self.centreX, self.centreY
-    
-    
+
+
 class Walls:
     def __init__(self, namep, x=None, y=None, width=None, height=None):
         self.centreX = x
@@ -675,25 +683,25 @@ class Counter:
     def __init__(self):
         self.dirtCollected = 0
 
-    def itemCollected(self,canvas):
+    def itemCollected(self, canvas):
         self.dirtCollected += 1
         canvas.delete("dirtCount")
-        canvas.create_text(50,50,anchor="w",\
-                        text="Total Collected Dirt: "+str(self.dirtCollected),\
-                        tags="dirtCount", font=("Arial", 20, "bold"), fill="darkgreen")
+        canvas.create_text(50, 50, anchor="w", \
+                           text="Total Collected Dirt: " + str(self.dirtCollected), \
+                           tags="dirtCount", font=("Arial", 20, "bold"), fill="darkgreen")
 
 
 def start_client_local():
     """Start the client in a thread-safe way"""
     from client.runners.run_local import main as run_local
     import asyncio
-    
+
     try:
         loop = asyncio.get_event_loop()
     except RuntimeError:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-    
+
     if loop.is_running():
         asyncio.run_coroutine_threadsafe(run_local(), loop)
     else:
@@ -701,21 +709,22 @@ def start_client_local():
         def run_loop():
             asyncio.set_event_loop(loop)
             loop.run_until_complete(run_local())
-        
+
         thread = threading.Thread(target=run_loop, daemon=True)
         thread.start()
+
 
 def start_client_api():
     """Start the client in a thread-safe way"""
     from client.runners.run_api import main as run_api
     import asyncio
-    
+
     try:
         loop = asyncio.get_event_loop()
     except RuntimeError:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-    
+
     if loop.is_running():
         asyncio.run_coroutine_threadsafe(run_api(), loop)
     else:
@@ -723,14 +732,17 @@ def start_client_api():
         def run_loop():
             asyncio.set_event_loop(loop)
             loop.run_until_complete(run_api())
-        
+
         thread = threading.Thread(target=run_loop, daemon=True)
         thread.start()
 
+# def start_client_api():
+#     """Start the client in a thread-safe way and open a terminal window to run it"""
+#     subprocess.Popen(["start", "cmd", "/K", "uv run client/runners/run_api.py"], shell=True)
 
 def initialise(window):
-    window.resizable(False,False)
-    
+    window.resizable(False, False)
+
     # Create main frame
     main_frame = tk.Frame(window)
     main_frame.pack(fill=tk.BOTH, expand=True)
@@ -738,17 +750,18 @@ def initialise(window):
     # Add control buttons frame
     button_frame = tk.Frame(main_frame)
     button_frame.pack(side=tk.TOP, fill=tk.X)
-    
+
     # Add client buttons
     client_btn1 = tk.Button(button_frame, text="Local LLM", command=start_client_local)
     client_btn1.pack(side=tk.LEFT, padx=5, pady=5)
-    
+
     client_btn2 = tk.Button(button_frame, text="Online API", command=start_client_api)
     client_btn2.pack(side=tk.LEFT, padx=5, pady=5)
 
     canvas = tk.Canvas(main_frame, width=1500, height=700)
     canvas.pack()
     return canvas
+
 
 def buttonClicked(x, y, agents, canvas, appliances):
     for rr in agents:
@@ -759,9 +772,9 @@ def buttonClicked(x, y, agents, canvas, appliances):
             rr.brain.goalReached = None
     draw_appliances(canvas, image_cache, appliances)
 
+
 def draw_appliances(canvas, image_cache, appliances):
     canvas.delete("appliance_status")
-    devices, sensors = appliances
 
     # 加载家电和传感器图片
     device_images = {
@@ -803,47 +816,48 @@ def draw_appliances(canvas, image_cache, appliances):
     }
 
     # 绘制所有设备
-    for device in devices + sensors:
+    for device in appliances:
+        print(type(device))
         if device.name in positions:
             x, y, img_key = positions[device.name]
             device.draw(canvas, x, y, image_cache[img_key])
 
 
-def createObjects(canvas,noOfBots,noOfLights,amountOfDirt,noOfCats, appliances):
+def createObjects(canvas, noOfBots, noOfLights, amountOfDirt, noOfCats, appliances):
     agents = []
     passiveObjects = []
 
     draw_appliances(canvas, image_cache, appliances)
 
-    for i in range(0,noOfCats):
-        cat = Cat("Cat"+str(i),canvas)
+    for i in range(0, noOfCats):
+        cat = Cat("Cat" + str(i), canvas)
         agents.append(cat)
         cat.draw(canvas)
 
-    for i in range(0,noOfLights):
-        lamp = Lamp("Lamp"+str(i))
+    for i in range(0, noOfLights):
+        lamp = Lamp("Lamp" + str(i))
         passiveObjects.append(lamp)
         lamp.draw(canvas)
 
-    charger = Charger("Charger1",90, 330)
+    charger = Charger("Charger1", 90, 330)
     passiveObjects.append(charger)
     charger.draw(canvas)
-    charger = Charger("Charger2",210, 630)
+    charger = Charger("Charger2", 210, 630)
     passiveObjects.append(charger)
     charger.draw(canvas)
     charger = Charger("Charger3", 330, 150)
     passiveObjects.append(charger)
     charger.draw(canvas)
-    charger = Charger("Charger4",750, 630)
+    charger = Charger("Charger4", 750, 630)
     passiveObjects.append(charger)
     charger.draw(canvas)
-    charger = Charger("Charger5",930, 150)
+    charger = Charger("Charger5", 930, 150)
     passiveObjects.append(charger)
     charger.draw(canvas)
-    charger = Charger("Charger6",1110, 390)
+    charger = Charger("Charger6", 1110, 390)
     passiveObjects.append(charger)
     charger.draw(canvas)
-    
+
     # hub1 = WiFiHub("Hub1",950,135)
     # passiveObjects.append(hub1)
     # hub1.draw(canvas)
@@ -851,8 +865,8 @@ def createObjects(canvas,noOfBots,noOfLights,amountOfDirt,noOfCats, appliances):
     # passiveObjects.append(hub2)
     # hub2.draw(canvas)
 
-    for i in range(0,amountOfDirt):
-        dirt = Dirt("Dirt"+str(i))
+    for i in range(0, amountOfDirt):
+        dirt = Dirt("Dirt" + str(i))
         passiveObjects.append(dirt)
         dirt.draw(canvas)
 
@@ -869,24 +883,25 @@ def createObjects(canvas,noOfBots,noOfLights,amountOfDirt,noOfCats, appliances):
 
     count = Counter()
 
-    for i in range(0,noOfBots):
-        bot = Bot("Bot"+str(i),canvas, passiveObjects, count)
+    for i in range(0, noOfBots):
+        bot = Bot("Bot" + str(i), canvas, passiveObjects, count)
         brain = Brain(bot)
         bot.setBrain(brain)
         agents.append(bot)
         bot.draw(canvas)
-    
-    canvas.bind( "<Button-1>", lambda event: buttonClicked(event.x,event.y,agents, canvas,appliances) )
-    
+
+    canvas.bind("<Button-1>", lambda event: buttonClicked(event.x, event.y, agents, canvas, appliances))
+
     return agents, passiveObjects, count
 
-def moveIt(canvas,agents,passiveObjects,count,moves, timeOfDirt, draw_cam_line, appliances):
+
+def moveIt(canvas, agents, passiveObjects, count, moves, timeOfDirt, draw_cam_line, appliances):
     for rr in agents:
-        rr.thinkAndAct(agents,passiveObjects,canvas)
-        rr.update(canvas,passiveObjects,1.0)
-        if isinstance(rr,Bot):
-            passiveObjects = rr.collectDirt(canvas,passiveObjects,count)
-        moves +=1
+        rr.thinkAndAct(agents, passiveObjects, canvas)
+        rr.update(canvas, passiveObjects, 1.0)
+        if isinstance(rr, Bot):
+            passiveObjects = rr.collectDirt(canvas, passiveObjects, count)
+        moves += 1
         # Regenerate dirt every 10000 moves
         if moves % timeOfDirt == 0 and moves != 0:
             for i in range(300):
@@ -898,7 +913,8 @@ def moveIt(canvas,agents,passiveObjects,count,moves, timeOfDirt, draw_cam_line, 
     if draw_cam_line:
         drawAllCameraLines(canvas, agents)
 
-    canvas.after(20,moveIt,canvas,agents,passiveObjects,count,moves, timeOfDirt, draw_cam_line, appliances)
+    canvas.after(20, moveIt, canvas, agents, passiveObjects, count, moves, timeOfDirt, draw_cam_line, appliances)
+
 
 # Adapt code from lab session
 # Create by NattapongNEADTIP_20717335
@@ -937,16 +953,18 @@ def avoidRobots(canvas, listOfRobots, dt=1.0):
     # Schedule next update
     canvas.after(20, avoidRobots, canvas, listOfRobots, dt)
 
+
 def update_appliances_display(canvas, appliances):
     """Update display of all appliances every 2 seconds"""
     # draw_appliances(canvas, image_cache, appliances)
     update_appliance_status(canvas, appliances, drawable_devices)
     canvas.after(2000, update_appliances_display, canvas, appliances)
 
+
 def drawGrid(canvas, rows=12, cols=20, canvas_width=1200, canvas_height=720):
     cell_width = canvas_width // cols
     cell_height = canvas_height // rows
- 
+
     # Draw vertical lines
     for i in range(cols + 1):
         x = i * cell_width
@@ -957,6 +975,7 @@ def drawGrid(canvas, rows=12, cols=20, canvas_width=1200, canvas_height=720):
         y = j * cell_height
         canvas.create_line(0, y, canvas_width, y)
 
+
 def drawAllCameraLines(canvas, agents):
     canvas.delete("view")  # Remove old lines
 
@@ -964,7 +983,6 @@ def drawAllCameraLines(canvas, agents):
         if isinstance(agent, Bot):
 
             agent.look(canvas, agents)
-
 
             radius = 30
             num_cameras = 30
@@ -975,30 +993,93 @@ def drawAllCameraLines(canvas, agents):
                 angle = agent.theta + angle_offset
                 cam_x = agent.x + radius * math.cos(angle)
                 cam_y = agent.y + radius * math.sin(angle)
-                canvas.create_line(cam_x, cam_y, cam_x + 200 * math.cos(angle), cam_y + 200 * math.sin(angle), fill="light grey", tags="view")
+                canvas.create_line(cam_x, cam_y, cam_x + 200 * math.cos(angle), cam_y + 200 * math.sin(angle),
+                                   fill="light grey", tags="view")
 
+def start_server(shared_devices):
+    # 启动 server/app.py
+    process = subprocess.Popen(
+        ["uv", "run", "server/app.py"],
+        stdin=subprocess.PIPE,  # 管道输入
+        # stdout=subprocess.DEVNULL,
+        # stderr=subprocess.DEVNULL
+    )
 
-def sim_main(noOfBots=1, noOfCats=1, amountOfDirt=1000, timeOfDirt = 1000, draw_cam_line =False, draw_grid=False, appliances=None):
+    # from server.app import main as server
+    # asyncio.run(server())
+    # 要传递的设备数据（示例）
+    devices_data = []
+    for device in shared_devices:
+        devices_data.append(device.to_dict())
+    print(f"devices_data:\n{devices_data}")
+
+    # 将设备数据转为 JSON 格式并通过管道传输
+    json_data = json.dumps(devices_data)
+    process.stdin.write(json_data.encode())  # 写入数据
+    process.stdin.flush()
+
+    # 获取子进程输出（如果有）
+    # output = process.stdout.read().decode()
+    # print(output)
+
+    # 等待进程结束
+    # process.wait()
+
+def initialize_appliances():
+
+    simulator = HomeSimulator()
+    global appliances
+    appliances = simulator.instantiate_devices()
+    print(f"appliances:\n{appliances}")
+
+    # with multiprocessing.Manager() as manager:
+    #     shared_devices = manager.dict({"appliances": None})  # 使用 Manager 来存储共享的数据
+    #     shared_devices['appliances'] = appliances
+    #
+    #     # 启动 server 进程（将设备信息存入共享内存）
+    #     server_process = multiprocessing.Process(target=start_server, args=(shared_devices,))
+    #     server_process.start()
+    #     server_process.join()
+
+    # Start server process without shared memory
+    server_process = multiprocessing.Process(target=start_server, args=(appliances,))
+    server_process.start()
+    simulator.generate_resources()
+    # server_process.join()
+
+def sim_main(noOfBots=1,
+             noOfCats=1,
+             amountOfDirt=1000,
+             timeOfDirt=1000,
+             draw_cam_line=False,
+             draw_grid=False,
+             # appliances=None
+             ):
     window = tk.Toplevel()
     canvas = initialise(window)
+
+    initialize_appliances()
+    global appliances
+    print("appliances:", appliances)
+
     agents, passiveObjects, count = createObjects(canvas,
                                                   noOfBots=noOfBots,
                                                   noOfLights=0,
                                                   amountOfDirt=amountOfDirt,
                                                   noOfCats=noOfCats,
                                                   appliances=appliances)
-    
+
     canvas.agents = agents
     print("Starting home appliance simulation...")
-    
-    
+
     if draw_cam_line:
         drawAllCameraLines(canvas, agents)
 
     if draw_grid:
         drawGrid(canvas)
 
-    moveIt(canvas, agents, passiveObjects, count, 0, timeOfDirt=timeOfDirt, draw_cam_line=draw_cam_line, appliances=appliances)
-    update_appliances_display(canvas, appliances)  # Start the periodic updates
+    moveIt(canvas, agents, passiveObjects, count, 0, timeOfDirt=timeOfDirt, draw_cam_line=draw_cam_line,
+           appliances=appliances)
+    # update_appliances_display(canvas, appliances)  # Start the periodic updates
     robotList = [a for a in agents if isinstance(a, Bot)]
     avoidRobots(canvas, robotList)

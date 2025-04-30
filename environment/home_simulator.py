@@ -1,12 +1,16 @@
-
+import multiprocessing
 import os
 import sys
 import json
+import threading
+from multiprocessing import Manager, Process
 from pathlib import Path
 from threading import Timer
 from datetime import datetime
 import subprocess
 import asyncio
+
+# from server.app import appliances
 
 # Add project root directory to Python path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -67,8 +71,14 @@ class HomeSimulator:
         ]
 
         print(f"[Simulator] 注册了 {len(self.devices)} 个设备和 {len(self.sensors)} 个传感器")
+        applist = []
+        for d in self.devices:
+            applist.append(d)
+        for s in self.sensors:
+            applist.append(s)
 
-        return [self.devices, self.sensors]
+        # return [self.devices, self.sensors]
+        return applist
 
     def generate_resources(self):
         """生成初始 devices.json 和 sensors.json 文件"""
@@ -173,30 +183,36 @@ class HomeSimulator:
             self.timer.cancel()
             print("[Simulator] 停止传感器状态更新")
 
-def simulate(args):
-    simulator = HomeSimulator()
-    simulator.start_sensors()
-    simulator.start_devices()
-    appliances = simulator.instantiate_devices()
-    numOfRobots, numOfCats, amountOfDirt, timeOfDirt, drawCamLine, drawGrid = args
-    from environment.simulator_with_appliance import sim_main
-    sim_main(numOfRobots, numOfCats, amountOfDirt, timeOfDirt, drawCamLine, drawGrid, appliances)
+def start_server():
+    # 启动 server/app.py
     subprocess.Popen(
-        ["uv", "run", "server/app.py"],
+        ["python", "server/app.py"],
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL
     )
+
+def sim_main_process(args):
+    from environment.simulator_with_appliance import sim_main
+    numOfRobots, numOfCats, amountOfDirt, timeOfDirt, drawCamLine, drawGrid = args
+    sim_main(numOfRobots, numOfCats, amountOfDirt, timeOfDirt, drawCamLine, drawGrid)
+
+def simulate(args):
+    # start_server()
+    # args = [1, 1, 1, 3000, False, False]
+    sim_main_process(args)
+    pass
+    # simulator = HomeSimulator()
+    # simulator.start_sensors()
+    # simulator.start_devices()
+    # appliances = simulator.instantiate_devices()
+    # numOfRobots, numOfCats, amountOfDirt, timeOfDirt, drawCamLine, drawGrid = args
+    # from environment.simulator_with_appliance import sim_main
+    # sim_main(numOfRobots, numOfCats, amountOfDirt, timeOfDirt, drawCamLine, drawGrid, appliances)
+    # subprocess.Popen(
+    #     ["uv", "run", "server/app.py"],
+    #     stdin=subprocess.DEVNULL,
+    #     stdout=subprocess.DEVNULL,
+    #     stderr=subprocess.DEVNULL,
+    # )
     # simulator.stop()
-
-
-# if __name__ == "__main__":
-#     raw_args = sys.argv[1]
-#     parts = list(map(int, raw_args.split(",")))
-
-#     if len(parts) != 6:
-#         raise ValueError(f"收到的参数数量不对：{parts}")
-
-#     args = parts[:4] + list(map(bool, parts[4:]))  # 把前四个 int，后两个 bool
-    
-#     main(args)

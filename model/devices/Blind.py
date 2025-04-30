@@ -6,10 +6,21 @@ class Blind(Device):
     百叶窗设备类，支持百分比开合度控制。
     """
 
-    def __init__(self, name: str):
-        super().__init__(name)
+    def __init__(self, name: str, **kwargs):
+        super().__init__(name, **kwargs)
         self.level = 0  # 0-100 percentage
-        # DeviceManager.register_device(self)
+        DeviceManager.register_device(self)
+
+    def to_dict(self):
+        data = super().to_dict()  # 调用基类的 to_dict
+        data["level"] = self.level  # 添加设备的特有属性
+        return data
+
+    @classmethod
+    def from_dict(cls, data):
+        instance = super().from_dict(data)  # 调用基类的 from_dict
+        instance.level = data["level"]  # 重建特有属性
+        return instance
 
     def turn_on(self):
         """打开百叶窗（设置为100%）"""

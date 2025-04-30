@@ -6,11 +6,13 @@ import tkinter as tk
 import subprocess
 import threading
 import asyncio
+
+from torch.fx.tensor_type import is_more_precise
+
 from environment.simulator import main
 
 # Add project root to Python path
 sys.path.append(str(Path(__file__).parent.parent))
-from server.runner import main as server
 
 
 #Creating Setting in Page
@@ -111,9 +113,6 @@ class Home:
         except Exception as e:
             messagebox.showerror("Input Error", f"Unexpected error: {str(e)}")
 
-# mainWindow = tk.Tk()
-# my_system = Home(mainWindow)
-# mainWindow.mainloop()
 # mainWindow = tk.Tk()
 # my_system = Home(mainWindow)
 # mainWindow.mainloop()

@@ -1,17 +1,37 @@
 from abc import ABC, abstractmethod
 
+WIDTH = 50
+HEIGHT = 50
+
 class Device(ABC):
     """
     所有智能家居设备的抽象基类，定义统一接口。
     """
     _devices = {}  # 类属性维护设备注册表
 
-    def __init__(self, name: str, width=50, height=50):
+    def __init__(self, name: str, width=WIDTH, height=HEIGHT, **kwargs):
         self.name = name
         self.width = width
         self.height = height
         self.__class__._devices[name] = self
         self._canvas_items = {}  # 记录canvas上画的元素，方便后续更新
+        self._kwargs = kwargs  # 接受其他额外的属性
+
+    def to_dict(self):
+        """将设备对象转换为字典"""
+        data = {
+            "name": self.name,
+            "type": self.__class__.__name__  # 添加设备类型信息，以便于识别
+        }
+        data.update(self._kwargs)  # 添加额外的属性
+        return data
+
+    @classmethod
+    def from_dict(cls, data):
+        """根据字典数据重建设备对象"""
+        # 使用字典中的数据构造设备实例
+        instance = cls(data["name"], **{k: v for k, v in data.items() if k not in ["name","type"]})
+        return instance
 
     @abstractmethod
     def turn_on(self):
