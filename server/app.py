@@ -1,23 +1,27 @@
-""" 
-智能家居设备控制服务主模块
+"""
+server/app.py - Smart Home Control Service Main Module
 
-该模块是智能家居系统的核心服务入口，负责处理设备控制请求，包括开关设备、设置设备级别、列出设备列表等功能。
+This module serves as the core service entry point for the smart home system,
+handling device control requests including:
+- Turning devices on/off
+- Setting device parameters
+- Listing registered devices
+- Health checking
 
-模块基于 FastMCP 框架实现，通过标准输入输出与客户端进行通信。
+Built on FastMCP framework, using stdio for client communication.
 
-模块功能：
-- switch_device: 控制设备的开关状态
-- set_device_level: 设置设备的运行参数值
-- list_devices: 获取已注册设备的ID列表
-- test_ping: 服务健康检查接口
+Key Features:
+- Device control via MCP tools
+- Resource management for devices/sensors
+- Health monitoring endpoints
 
-项目位置：
-- 模块路径: server/app.py 
+Location: server/app.py (relative to project root)
 
-依赖模块：
-- mcp.types: MCP 类型定义
-- mcp.server: MCP 服务框架
-- model.registry: 设备注册表管理"""
+Dependencies:
+- mcp.types: MCP type definitions
+- mcp.server: MCP server framework  
+- model.registry: Device registry management
+"""
 import multiprocessing
 import os
 import subprocess
@@ -30,10 +34,10 @@ import argparse
 
 # from environment.home_simulator import HomeSimulator
 
-# 将项目根目录添加到Python路径（注意：推荐使用包管理方式替代路径修改）
+# Add project root to Python path (Note: Package management is preferred over path modification)
 sys.path.append(str(Path(__file__).parent.parent))
 
-# 服务核心组件
+# Core service components
 # import mcp.types as types
 from mcp.types import Resource, FileUrl
 from mcp.server import FastMCP
@@ -54,10 +58,10 @@ from model.sensors.PowerMeter import PowerMeter
 from model.sensors.RainSensor import RainSensor
 
 
-# 从标准输入接收 appliances_data（JSON 格式）
-# input_data = sys.stdin.read()  # 读取管道传输的全部数据
+# Read appliances data from mock initialization file (JSON format)
+# Alternative: input_data = sys.stdin.read()  # Read all piped data
 with open(r'server\resources\mock_appliances_init.txt', 'r', encoding='utf-8') as file:
-    input_data = file.read().strip()  # 读取并去除首尾的空白字符
+    input_data = file.read().strip()  # Read and strip whitespace
 print(input_data,type(input_data))
 if input_data:
     appliances_data = json.loads(input_data)
@@ -65,11 +69,11 @@ else:
     appliances_data = []
 
 
-# 反序列化 appliances 数据并根据设备类型创建相应的设备实例
+# Deserialize appliances data and create corresponding device instances
 appliances = []
 for data in appliances_data:
     print(f"data: {data} {type(data)}")
-    device_type = data["type"]  # 获取设备类型
+    device_type = data["type"]  # Get device type
     if device_type == "AirConditioner":
         appliance = AirConditioner.from_dict(data)
     elif device_type == "AirPurifier":
@@ -93,7 +97,7 @@ for data in appliances_data:
     elif device_type == "RainSensor":
         appliance = RainSensor.from_dict(data)
     else:
-        # 如果类型无法识别，跳过或报错
+        # Skip or error if device type is unrecognized
         print(f"Unrecognized device type: {device_type}")
         continue
 
@@ -101,48 +105,47 @@ for data in appliances_data:
 
 
 RESOURCE_DIR = os.path.join(os.path.dirname(__file__), "resources")
-# 预定义资源清单
+# Predefined resource list
 STATIC_RESOURCES = {
     "devices": {
         "name": "Device List",
-        "desc": "预注册设备清单",
+        "desc": "Pre-registered device inventory",
         "path": "server/resources/devices.json"
     },
     "sensors": {
         "name": "Sensor List", 
-        "desc": "传感器实时状态",
+        "desc": "Real-time sensor status",
         "path": "server/resources/sensors.json"
     }
 }
 
-# 初始化智能家居MCP服务实例
+# Initialize smart home MCP service instance
 mcp = FastMCP('smart-home')
 
 
 @mcp.tool()
 def control_device(device_id: str, status: str, level: Optional[int] = None) -> str:
     """
-    设备控制函数，根据传入的状态控制设备的开关，并可选地设置设备的级别
+    Control a device by changing its power state and optionally setting its level.
 
-    参数:
-        device_id: 设备唯一标识符，需在设备注册表中存在
-        status: 设备目标状态，"on"表示开启，"off"表示关闭
-        level: 设备运行参数值，范围0-100的整数百分比，仅在需要调节设备级别时使用
+    Args:
+        device_id: Unique device identifier (must exist in registry)
+        status: Target power state ("on" to turn on, "off" to turn off)
+        level: Optional parameter value (0-100 integer percentage) for devices
+               that support level control
 
-    返回:
-        str: 包含操作结果的格式化字符串，示例：
+    Returns:
+        str: Formatted result string, examples:
             - "Device light01 turned on"
             - "Device curtain02 set to 75%"
+            
+    Raises:
+        ValueError: If device_id is not found in registry
     """
 
     device = get_device_by_id(device_id)
-
-    file_path = os.path.join(os.getcwd(), "output.txt")
-    content = "entered control_device()"
-    with open(file_path, "a", encoding="utf-8") as file:
-        file.write(content)
     
-    # 处理设备开关状态
+    # Handle device power state
     if status == "on":
         device.turn_on()
         return f"Device {device_id} turned on"
@@ -150,7 +153,7 @@ def control_device(device_id: str, status: str, level: Optional[int] = None) -> 
         device.turn_off()
         return f"Device {device_id} turned off"
 
-    # 如果有 level 参数且设备支持调节级别，执行设置级别操作
+    # If level parameter is provided and device supports level control
     if level is not None:
         device.set_level(level)
         return f"Device {device_id} set to {level}"
@@ -161,10 +164,10 @@ def control_device(device_id: str, status: str, level: Optional[int] = None) -> 
 # @mcp.tool()
 # def list_devices() -> list[str]:
 #     """
-#     获取已注册设备清单
+#     Get list of all registered devices
 #
-#     返回:
-#         list[str]: 当前系统中所有注册设备的ID列表
+#     Returns:
+#         list[str]: IDs of all registered devices in the system
 #     """
 #     from model.registry import list_all_devices
 #     return list_all_devices()
@@ -172,28 +175,30 @@ def control_device(device_id: str, status: str, level: Optional[int] = None) -> 
 @mcp.tool()
 def test_ping() -> str:
     """
-    服务健康检查接口
+    Health check endpoint for service connectivity testing.
 
-    返回:
-        str: 固定响应"pong"用于服务连通性测试
+    Returns:
+        str: Constant "pong" response to verify service is running
     """
     return "pong"
 
 @mcp.tool()
 def get_status(device_id: str) -> dict:
     """
-    获取设备状态
+    Get current status of a device or sensor.
     
-    参数:
-        device_id: 设备ID
+    Args:
+        device_id: Unique identifier of the device/sensor
         
-    返回:
-        dict: {
-            "id": str,
-            "type": "device"|"sensor",
-            "status": Any,
-            "timestamp": str(ISO格式)
-        }
+    Returns:
+        dict: Status object containing:
+            - id: Device/sensor ID
+            - type: "device" or "sensor"
+            - status: Current state information
+            - timestamp: ISO format timestamp
+            
+    Note:
+        Returns error object if device_id is not found
     """
     from model.Manager.DeviceManager import DeviceManager
     from model.Manager.SensorManager import SensorManager
@@ -205,7 +210,7 @@ def get_status(device_id: str) -> dict:
             "timestamp": datetime.now().isoformat()
         }
     
-    # 尝试作为设备获取
+    # Try to get as device
     device_manager = DeviceManager()
     if device_id in device_manager._devices:
         try:
@@ -219,7 +224,7 @@ def get_status(device_id: str) -> dict:
         except ValueError:
             pass
     
-    # 尝试作为传感器获取
+    # Try to get as sensor
     sensor_manager = SensorManager()
     if device_id in sensor_manager._sensors:
         try:
@@ -241,10 +246,21 @@ def get_status(device_id: str) -> dict:
 
 @mcp.resource("file://devices")
 async def list_resources() -> list[Resource]:
-    """返回所有已注册资源的元数据并读取文件内容"""
+    """
+    List all registered resources and read their file contents.
+    
+    Returns:
+        list[Resource]: List of Resource objects containing:
+            - URI
+            - Name
+            - Description
+            - MIME type
+            - File path
+            - File content
+    """
     resources = []
     for res_id, info in STATIC_RESOURCES.items():
-        # 读取文件内容
+        # Read file content
         file_path = Path(__file__).parent / 'resources' / f'{res_id}.json'
         with open(file_path, 'r', encoding='utf-8') as file:
             file_content = json.load(file)
@@ -256,31 +272,41 @@ async def list_resources() -> list[Resource]:
                 description=info["desc"],
                 mime_type="application/json",
                 file_path=file_path.resolve(),
-                content=file_content  # 返回文件内容
+                content=file_content  # Return file content
             )
         )
     return resources
 
 
 def add_resources():
-    # 添加设备资源，确保路径指向具体文件
+    """
+    Add static resources to the MCP server.
+    
+    Registers two main resources:
+    - devices.json: Pre-registered device list
+    - sensors.json: Real-time sensor status
+    
+    Note:
+        Resources are configured with refresh intervals and metadata
+    """
+    # Add device resource with specific file path
     devices_resource = Resource(
-        uri="file://resources/devices.json",  # 使用完整的 URI 路径
-        path=Path(__file__).parent / "resources" / "devices.json",  # 使用 Path 动态构建文件路径
+        uri="file://resources/devices.json",  # Full URI path
+        path=Path(__file__).parent / "resources" / "devices.json",  # Dynamic file path construction
         mime_type="application/json",
         name="Device List",
-        description="预注册设备清单"
+        description="Pre-registered device inventory"
     )
     mcp.add_resource(devices_resource)
 
-    # 添加传感器资源，确保路径指向具体文件
+    # Add sensor resource with specific file path
     sensors_resource = Resource(
-        uri="file://resources/sensors.json",  # 使用完整的 URI 路径
-        path=Path(__file__).parent / "resources" / "sensors.json",  # 使用 Path 动态构建文件路径
+        uri="file://resources/sensors.json",  # Full URI path
+        path=Path(__file__).parent / "resources" / "sensors.json",  # Dynamic file path construction
         mime_type="application/json",
         name="Sensor List",
-        description="传感器实时状态",
-        refresh_interval=5  # 5秒刷新间隔
+        description="Real-time sensor status",
+        refresh_interval=5  # 5 second refresh interval
     )
     mcp.add_resource(sensors_resource)
 
@@ -308,37 +334,36 @@ def add_resources():
 
 
 def start_server():
-    # 启动 server/app.py
+    # Start server/app.py subprocess
     process = subprocess.Popen(
         ["python", "server/app.py"],
-        stdin=subprocess.PIPE,  # 管道输入
+        stdin=subprocess.PIPE,  # Pipe input
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE
     )
 
-
-    # 要传递的设备数据（示例）
+    # Prepare device data to pass (example)
     devices_data = []
     for device in appliances:
         devices_data.append(device.to_dict())
 
-    # 将设备数据转为 JSON 格式并通过管道传输
+    # Convert device data to JSON and pipe it
     json_data = json.dumps(devices_data)
-    process.stdin.write(json_data.encode())  # 写入数据
+    process.stdin.write(json_data.encode())  # Write data
     process.stdin.flush()
 
-    # 获取子进程输出（如果有）
+    # Get subprocess output (if any)
     output = process.stdout.read().decode()
     print(output)
 
-    # 等待进程结束
+    # Wait for process to complete
     process.wait()
 
 def main():
     print("launching MCP server subprocess ...")
     mcp.run(transport='stdio')
 
-# 主入口：使用标准输入输出作为通信通道启动MCP服务
+# Main entry: Start MCP service using stdio for communication
 if __name__ == "__main__":
     # from .runner import main
 

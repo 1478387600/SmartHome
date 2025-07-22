@@ -1,4 +1,22 @@
-# client/strategies/openai_strategy.py
+"""
+client/strategies/openai.py - OpenAI Integration Strategy
+
+This module implements the OpenAI-based strategy for the smart home assistant,
+providing natural language processing capabilities through OpenAI's API.
+
+Key Features:
+- OpenAI API integration for LLM processing
+- Tool call generation and execution
+- Voice input/output via ASR/TTS modules
+- Conversation loop management
+
+Location: client/strategies/openai.py (relative to project root)
+
+Dependencies:
+- openai: OpenAI API client
+- dotenv: Environment variable management
+- client.speech: ASR/TTS modules
+"""
 import os
 import sys
 import json
@@ -16,6 +34,21 @@ load_dotenv()
 
 
 class OpenAIStrategy(BaseStrategy):
+    """
+    Implementation of BaseStrategy using OpenAI's API for LLM processing.
+    
+    Handles:
+    - OpenAI API client initialization
+    - Conversation management
+    - Tool call generation and execution
+    - Voice input/output integration
+    
+    Attributes:
+        client: OpenAI API client instance
+        model: Name of OpenAI model to use
+        tts: Text-to-speech module instance
+        asr: Automatic speech recognition module instance
+    """
     def __init__(self, mcp):
         super().__init__(mcp)
         self.client = OpenAI()
@@ -27,6 +60,19 @@ class OpenAIStrategy(BaseStrategy):
     async def _build_messages(
         self, query: str, tools: List[Dict[str, Any]], devices: List[dict], sensors: List[dict]
     ) -> List[Dict[str, Any]]:
+        """
+        Construct message list for OpenAI API from query and context.
+        
+        Args:
+            query: User input string
+            tools: List of available tools from MCP
+            devices: List of available devices
+            sensors: List of available sensors
+            
+        Returns:
+            List of message dictionaries formatted for OpenAI API
+            Includes system prompt with tool/device info and user query
+        """
         sys_prompt = (
             "You are a smart home assistant. User queries are meant to control various home devices.\n"
             "Your responses are divided into two typs, answers and tool calls. An answer contain only natural language while tool calls don't.\n"
@@ -55,6 +101,16 @@ class OpenAIStrategy(BaseStrategy):
 
     # --------- Main Conversation Loop ---------
     async def chat_loop(self) -> None:
+        """
+        Main interactive conversation loop with the user.
+        
+        Continuously:
+        1. Listens for voice input via ASR
+        2. Processes each query through _single_round
+        3. Exits when user says 'quit'
+        
+        Uses microphone input with 5-second chunks for real-time transcription.
+        """
         print("💬 Entering conversation loop (type quit to exit)")
         while True:
             # query = input("\nQuery: ").strip()
@@ -68,13 +124,27 @@ class OpenAIStrategy(BaseStrategy):
             await self._single_round(query)
 
     async def _single_round(self, query: str) -> None:
+        """
+        Process a single user query through the LLM and tool execution pipeline.
+        
+        Args:
+            query: User input to process
+            
+        Steps:
+            1. Gets available tools and device/sensor info from MCP
+            2. Builds messages for OpenAI API
+            3. Makes initial LLM call
+            4. Handles tool calls if needed
+            5. Processes results and generates final response
+            6. Uses TTS for voice output
+        """
         # Get tool list and device, sensor information
         tools = await self.mcp.list_tools()
         devices, sensors = await self.mcp.read_devices()
         
         # Building a Message
         messages = await self._build_messages(query, tools, devices, sensors)
-        print(f"messages:\n{messages}")
+        # print(f"messages:\n{messages}")
 
         # First call to LLM
         resp = self.client.chat.completions.create(
@@ -129,7 +199,11 @@ class OpenAIStrategy(BaseStrategy):
                 continue  # If there is a tool call, continue to loop
             
             # Text To Speech: Make sure you pass string type
+            # print(f"choice:{choice}")
+            print(f"content:{choice.message.content}")
+            self.tts.speak(choice.message.content)
             if 'message' in choice and hasattr(choice.message, 'content'):
+                print(f"content:{choice.message.content}")
                 self.tts.speak(choice.message.content)  # Access content correctly for TTS Text To Speech
 
         print("\n🔊 Response:", choice.message.content)  # Print final response

@@ -1,3 +1,12 @@
+"""
+model/base/Sensor.py - Base sensor class for smart home system
+
+This module defines the abstract base class for all smart home sensors in the system.
+It provides common interfaces and functionality that all sensors must implement.
+
+Location: model/base/Sensor.py (relative to project root)
+"""
+
 from abc import ABC, abstractmethod
 
 WIDTH = 50
@@ -5,43 +14,83 @@ HEIGHT = 50
 
 class Sensor(ABC):
     """
-    所有传感器类型的抽象基类。
+    Abstract base class for all smart home sensors, defining common interfaces.
     """
-    _sensors = {}
+    _sensors = {}  # Class-level registry of all sensor instances
 
     def __init__(self, name: str, width=WIDTH, height=HEIGHT, **kwargs):
+        """
+        Initialize a new sensor instance.
+        
+        Args:
+            name (str): Unique name identifier for the sensor
+            width (int): Display width in pixels (default: 50)
+            height (int): Display height in pixels (default: 50)
+            **kwargs: Additional sensor-specific attributes
+        """
         self.name = name
         self.width = width
         self.height = height
         self.__class__._sensors[name] = self
-        self._canvas_items = {}  # 记录canvas上画的元素，方便后续更新
+        self._canvas_items = {}  # Stores canvas elements for later updates
         self._kwargs = kwargs
 
     def to_dict(self):
-        """将设备对象转换为字典"""
+        """
+        Convert sensor object to dictionary representation.
+        
+        Returns:
+            dict: Contains sensor name and type
+        """
         return {
             "name": self.name,
-            "type": self.__class__.__name__  # 添加设备类型信息，以便于识别
+            "type": self.__class__.__name__  # Sensor type for identification
         }
 
     @classmethod
     def from_dict(cls, data):
-        """根据字典数据重建设备对象"""
-        # 使用字典中的数据构造设备实例
+        """
+        Reconstruct sensor object from dictionary data.
+        
+        Args:
+            data (dict): Dictionary containing sensor attributes
+            
+        Returns:
+            Sensor: New instance initialized with the provided data
+        """
         instance = cls(data["name"], **{k: v for k, v in data.items() if k not in ["name","type"]})
         return instance
 
 
     @abstractmethod
     def read_value(cls, device_id: str):
-        """读取当前传感器值"""
+        """
+        Read current value from sensor by device ID.
+        
+        Args:
+            device_id (str): Unique identifier of the sensor
+            
+        Returns:
+            Any: Current sensor reading value
+            
+        Raises:
+            ValueError: If sensor with given ID is not found
+        """
         sensor = cls._sensors.get(device_id)
         if sensor:
             return sensor.get_status()
         raise ValueError(f"Sensor {device_id} not found")
     
     def draw(self, canvas, x=None, y=None, image=None):
-        """在canvas上绘制自己，包括图片和状态文字"""
+        """
+        Draw the sensor on a canvas including image and status text.
+        
+        Args:
+            canvas: The canvas widget to draw on
+            x (int): Optional x-coordinate for center position
+            y (int): Optional y-coordinate for center position 
+            image: Optional image to use for sensor representation
+        """
         if x is not None:
             self.centreX = x
         if y is not None:
@@ -54,27 +103,26 @@ class Sensor(ABC):
         x2 = self.centreX + self.width // 2
         y2 = self.centreY + self.height // 2
 
-        # 如果之前画过，需要先删掉（避免叠图）
+        # Clear previous drawing if exists (to prevent overlapping)
         if self._canvas_items:
             for item in self._canvas_items.values():
                 canvas.delete(item)
             self._canvas_items.clear()
 
-        # 画图片
+        # Draw sensor image
         if self.image:
             img_item = canvas.create_image(self.centreX, self.centreY, image=self.image, tags=self.name)
         else:
             img_item = canvas.create_rectangle(x1, y1, x2, y2, fill="gray", tags=self.name)
 
-        # 画状态文字
-        status_text = self.read_value()  # 让子类/主类提供状态字符串
+        # Draw status text
+        status_text = self.read_value()  # Get status string from concrete implementation
         text_item = canvas.create_text(self.centreX + self.width, 
                                        self.centreY, 
                                        text=status_text, 
                                        tags="appliance_status",
                                        anchor="w", 
                                        font=("Arial", 10))
-        # 记录item
+        # Store canvas items for later updates
         self._canvas_items['image'] = img_item
         self._canvas_items['text'] = text_item
-

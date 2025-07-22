@@ -1,3 +1,22 @@
+"""
+client/speech/asr.py - Automatic Speech Recognition Module
+
+This module implements speech-to-text functionality using Whisper models,
+providing real-time transcription from microphone input.
+
+Key Features:
+- Whisper model integration
+- Real-time audio streaming
+- Microphone input handling
+- Configurable chunk processing
+
+Location: client/speech/asr.py (relative to project root)
+
+Dependencies:
+- transformers: Whisper model pipeline
+- pyaudio: Audio stream handling (optional)
+- numpy: Audio processing (optional)
+"""
 import pyaudio
 import numpy as np
 import time
@@ -5,26 +24,57 @@ from transformers import pipeline
 from transformers.pipelines.audio_utils import ffmpeg_microphone_live
 
 class ASRModule:
-    """语音识别模块（使用Whisper）"""
+    """
+    Automatic Speech Recognition module using Whisper models.
+    
+    Provides real-time speech-to-text transcription with configurable:
+    - Model size (tiny, base, small, medium, large)
+    - Processing chunk size
+    - Silence detection thresholds
+    
+    Usage:
+        asr = ASRModule(model_id="openai/whisper-base.en")
+        text = asr.transcribe_mic(5.0)  # 5 second chunks
+    """
 
     def __init__(self, model_id: str = "openai/whisper-tiny.en", device: str = "cpu", chunk_length_s: float = 1.0):
+        """
+        Initialize ASR module.
+        
+        Args:
+            model_id: Whisper model identifier
+            device: Processing device ('cpu' or 'cuda')
+            chunk_length_s: Audio chunk duration in seconds
+        """
         self.model_id = model_id
         self.device = device
-        self.chunk_length_s = chunk_length_s  # 每次处理的音频块时间长度（秒）
+        self.chunk_length_s = chunk_length_s  # Audio chunk duration (seconds)
         self.transcriber = self._load_model()
-        self.sample_rate = 16000  # 采样率
-        self.chunk_size = int(self.sample_rate * self.chunk_length_s)  # 每个音频块的大小（样本点数）
-        self.silence_threshold = 500  # 静音阈值（可调整）
-        self.silence_duration = 5  # 静音持续时间（秒）
+        self.sample_rate = 16000  # Sample rate (Hz)
+        self.chunk_size = int(self.sample_rate * self.chunk_length_s)  # Samples per chunk
+        self.silence_threshold = 500  # RMS threshold for silence detection
+        self.silence_duration = 5  # Silence duration to stop (seconds)
 
     def _load_model(self):
-        """加载Whisper模型"""
-        print(f"Loading ASR model: {self.model_id} on {self.device}...")
-        return pipeline("automatic-speech-recognition", model=self.model_id, device=0 if self.device == "cuda" else -1)
+        """Load and initialize Whisper ASR model."""
+        print(f"Initializing ASR model: {self.model_id} on {self.device}...")
+        return pipeline("automatic-speech-recognition", 
+                      model=self.model_id, 
+                      device=0 if self.device == "cuda" else -1)
 
     def transcribe_mic(self, chunk_length_s: float) -> str:
-        """ Transcribe the audio from a microphone """
-        # global transcriber
+        """
+        Transcribe live microphone input.
+        
+        Args:
+            chunk_length_s: Duration of audio chunks to process
+            
+        Returns:
+            str: Transcribed text
+            
+        Note:
+            Uses ffmpeg for efficient live audio streaming
+        """
         sampling_rate = self.transcriber.feature_extractor.sampling_rate
         mic = ffmpeg_microphone_live(
             sampling_rate=sampling_rate,

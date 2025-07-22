@@ -1,0 +1,59 @@
+{
+  "devices": [
+    {
+      "id": "living_room_ac",
+      "type": "AirConditioner",
+      "status": "off at 26\u00b0C"
+    },
+    {
+      "id": "bedroom_ac",
+      "type": "AirConditioner",
+      "status": "off at 26\u00b0C"
+    },
+    {
+      "id": "main_purifier",
+      "type": "AirPurifier",
+      "status": "off"
+    },
+    {
+      "id": "living_room_curtain",
+      "type": "Curtain",
+      "status": "closed"
+    },
+    {
+      "id": "kitchen_blind",
+      "type": "Blind",
+      "status": "0% open"
+    },
+    {
+      "id": "kitchen_light",
+      "type": "Light",
+      "status": "0% brightness"
+    },
+    {
+      "id": "bedroom_light",
+      "type": "Light",
+      "status": "0% brightness"
+    },
+    {
+      "id": "hallway_light",
+      "type": "Light",
+      "status": "0% brightness"
+    },
+    {
+      "id": "living_room_tv",
+      "type": "TV",
+      "status": "off"
+    },
+    {
+      "id": "bathroom_window",
+      "type": "Window",
+      "status": "closed"
+    },
+    {
+      "id": "bedroom_window",
+      "type": "Window",
+      "status": "closed"
+    }
+  ]
+}

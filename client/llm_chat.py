@@ -1,10 +1,30 @@
+"""
+client/llm_chat.py - LLM Chat Interface with ASR/TTS Support
+
+This module provides a command-line interface for interacting with LLM models,
+supporting both text and voice input/output through ASR (Automatic Speech Recognition)
+and TTS (Text-to-Speech) modules.
+
+Key Features:
+- Supports multiple LLM models (Qwen, Mistral, TinyLLaMA)
+- Interactive text and voice chat modes
+- Automatic model file path resolution
+
+Location: client/llm_chat.py (relative to project root)
+
+Dependencies:
+- llm.chat_engine: Core LLM chat functionality
+- speech.asr: Speech recognition module
+- speech.tts: Text-to-speech module
+"""
+
 import argparse
 import os
 from llm.chat_engine import ChatEngine
 from speech.asr import ASRModule
 from speech.tts import TTSModule
 
-# 简称 -> 完整模型文件名的映射
+# Model name shorthand -> full model filename mapping
 MODEL_MAP = {
     "qwen": "qwen2.5-1.5b-instruct-fp16.gguf",
     "mistral": "mistral-7b-instruct.gguf",
@@ -12,6 +32,15 @@ MODEL_MAP = {
 }
 
 def parse_args():
+    """
+    Parse command line arguments for LLM chat interface.
+    
+    Returns:
+        argparse.Namespace: Parsed command line arguments
+        
+    Raises:
+        SystemExit: If invalid model name is provided
+    """
     parser = argparse.ArgumentParser(
         description="LLaMA GPT Chat with ASR and TTS",
         usage="python llm_chat.py --model [qwen|mistral|tinyllama]"
@@ -20,35 +49,44 @@ def parse_args():
         "--model",
         type=str,
         required=True,
-        help="模型简称，比如 qwen、mistral、tinyllama",
+        help="Model shorthand name (qwen, mistral, or tinyllama)",
     )
     args = parser.parse_args()
 
     if args.model not in MODEL_MAP:
-        print(f"❌ 无效模型名 '{args.model}'。请选择: {list(MODEL_MAP.keys())}")
+        print(f"❌ Invalid model name '{args.model}'. Please choose from: {list(MODEL_MAP.keys())}")
         exit(1)
 
     return args
 
 def main():
+    """
+    Main entry point for LLM chat interface.
+    
+    Handles:
+    - Model file path resolution
+    - Module initialization
+    - Interactive chat loop
+    - Mode selection (text/voice input)
+    """
     args = parse_args()
 
-    # 根据简称找到完整路径
+    # Resolve full model path from shorthand name
     model_dir = os.path.join(os.path.dirname(__file__), "models")
     model_file = MODEL_MAP[args.model]
     model_path = os.path.join(model_dir, model_file)
 
-    # 检查模型文件是否存在
+    # Verify model file exists
     if not os.path.isfile(model_path):
-        print(f"❌ 模型文件不存在: {model_path}")
+        print(f"❌ Model file not found: {model_path}")
         exit(1)
 
-    print(f"✅ 正在使用模型: {args.model} ({model_file})")
+    print(f"✅ Using model: {args.model} ({model_file})")
 
-    # 初始化各个模块
-    chat_engine = ChatEngine(model_path=model_path)  # 要把 model_path传进去
-    asr = ASRModule()
-    tts = TTSModule()
+    # Initialize all modules
+    chat_engine = ChatEngine(model_path=model_path)  # Pass model_path to chat engine
+    asr = ASRModule()  # Automatic Speech Recognition
+    tts = TTSModule()  # Text-to-Speech
 
     mode = input("Choose mode: (1) Text input (2) Audio input : ")
 

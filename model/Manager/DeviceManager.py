@@ -1,20 +1,20 @@
 """
-智能家居设备管理核心模块
+model/Manager/DeviceManager.py - Core device management for smart home system
 
-该模块实现智能家居系统的设备管理中心，采用单例模式确保全局设备状态一致性。
-负责设备的统一注册、状态维护和访问控制，为上层服务提供设备管理基础能力。
+This module implements the central device management system for the smart home,
+using singleton pattern to ensure global device state consistency. It handles
+device registration, state maintenance and access control, providing core device
+management capabilities for upper layer services.
 
-模块功能：
-- register_device: 注册新设备到管理系统
-- get_device_status: 获取指定设备当前状态
-- 单例控制: 保证全局唯一设备管理实例
+Key Features:
+- register_device: Register new devices to the system
+- get_device_status: Get current status of specified device
+- Singleton pattern: Ensures single global instance
 
-项目位置：
+Location: model/Manager/DeviceManager.py (relative to project root)
 
-- 模块路径: model/Manager/DeviceManager.py
-
-依赖模块：
-- model.Device: 设备基类接口定义
+Dependencies:
+- model.base.Device: Base device interface definitions
 """
 
 from typing import Dict
@@ -23,28 +23,29 @@ from ..base.Device import Device
 
 class DeviceManager:
     """
-    设备管理单例类，提供设备注册、状态查询等核心功能。
+    Singleton class for device management, providing core functionality for device
+    registration and status querying.
 
-    特性：
-    - 单例模式：通过重写 __new__ 方法保证全局唯一实例
-    - 设备注册表：维护设备名称到设备对象的映射关系
-    - 状态管理：提供统一的设备状态查询接口
+    Features:
+    - Singleton pattern: Ensures single instance via __new__ override
+    - Device registry: Maintains mapping of device names to device objects
+    - Status management: Provides unified device status query interface
 
-    典型用法：
+    Typical usage:
     >>> manager = DeviceManager()
     >>> manager.register_device(Light("living_room_light"))
     >>> print(manager.get_status("living_room_light"))
     """
 
-    _instance = None  # 单例实例存储
-    _devices: Dict[str, Device] = {}  # 设备注册表（设备名称 -> 设备对象）
+    _instance = None  # Stores the singleton instance
+    _devices: Dict[str, Device] = {}  # Device registry (name -> device object mapping)
 
     def __new__(cls):
         """
-        单例构造方法，确保只创建一个实例
+        Singleton constructor ensuring only one instance is created.
 
-        返回：
-            DeviceManager: 全局唯一的设备管理器实例
+        Returns:
+            DeviceManager: The single global device manager instance
         """
         if not cls._instance:
             cls._instance = super().__new__(cls)
@@ -53,13 +54,13 @@ class DeviceManager:
     @classmethod
     def register_device(cls, device: Device) -> None:
         """
-        注册设备到管理系统中
+        Register a device with the management system.
 
-        参数：
-            device (Device): 要注册的设备对象，需实现Device接口
+        Args:
+            device (Device): Device object to register, must implement Device interface
 
-        异常：
-            ValueError: 当设备名称已存在时抛出
+        Note:
+            Currently allows duplicate device names (commented out check)
         """
         # if device.name in cls._devices:
         #     raise ValueError(f"Device {device.name} already registered")
@@ -68,16 +69,16 @@ class DeviceManager:
     @classmethod
     def get_device_status(cls, device_id: str) -> str:
         """
-        获取指定设备的当前状态
+        Get current status of a registered device.
 
-        参数：
-            device_id (str): 设备唯一标识符
+        Args:
+            device_id (str): Unique identifier of the device
 
-        返回：
-            str: 设备状态信息字符串
+        Returns:
+            str: Human-readable status information
 
-        异常：
-            ValueError: 当设备未注册时抛出
+        Raises:
+            ValueError: If device is not registered
         """
         device = cls._devices.get(device_id)
         if not device:

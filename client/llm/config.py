@@ -1,14 +1,27 @@
-# config.py
+"""
+client/llm/config.py - LLM Configuration Settings
+
+This module contains configuration settings for the LLM (Large Language Model) component
+of the smart home system, including:
+
+- Model file paths
+- Device and sensor lists
+- System prompt template
+- Response format specifications
+
+Location: client/llm/config.py (relative to project root)
+"""
+
 from typing import List
 import os
 
-# 模型文件目录
+# Directory containing model files
 MODEL_DIR = os.path.join(os.path.dirname(__file__), "models")
 
-# 模型文件路径
+# Default model file path
 MODEL_FILE = os.path.join(MODEL_DIR, "qwen2.5-1.5b-instruct-fp16.gguf")
 
-# 可用设备和传感器
+# Available smart home devices and sensors
 DEVICES: List[str] = [
     "living_room_ac", "bedroom_ac", "main_purifier",
     "living_room_curtain", "kitchen_blind",
@@ -20,7 +33,7 @@ SENSORS: List[str] = [
     "power_meter", "rain_sensor"
 ]
 
-# system prompt内容
+# System prompt template defining LLM behavior and response format
 SYSTEM_MESSAGE: str = (
     f"You are an AI assistant for a smart home system.\n"
     f"Please answer in a short and interesting way.\n"

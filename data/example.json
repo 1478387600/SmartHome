@@ -1,0 +1,84 @@
+[
+    {
+        "type":"instruct",
+        "conversations": [
+            {
+                "from": "user",
+                "content": "please turn on the TV."
+            },
+            {
+                "from": "assistant",
+                "content": {
+                    "message": "OK, I will turn on the TV for you.",
+                    "type": "tool",
+                    "name": "control_device",
+                    "arguments": {
+                        "device_id": "living_room_tv",
+                        "status": "on",
+                        "level": null
+                    }
+                }
+            }
+        ]
+    },
+    {
+        "type":"feedback",
+        "conversations": [
+            {
+                "from": "tool",
+                "content": {
+                    "id": "tv",
+                    "type": "device",
+                    "status": "Device bedroom_ac turned off",
+                    "timestamp": "2025-04-25T20:59:56.143426"
+                }
+            },
+            {
+                "from": "assistant",
+                "content": {
+                    "message": "Now the air conditioner in bedroom has been turned off."
+                }
+            }
+        ]
+    },
+    {
+        "type":"instruct",
+        "conversations": [
+            {
+                "from": "user",
+                "content": "What's the temperature in the house?"
+            },
+            {
+                "from": "assistant",
+                "content": {
+                    "message": "OK, checking the indoor temperature sensor for you.",
+                    "type": "tool",
+                    "name": "get_status",
+                    "arguments": {
+                        "device_id": "indoor_temp_sensor"
+                    }
+                }
+            }
+        ]
+    },
+    {
+        "type":"feedback",
+        "conversations": [
+            {
+                "from": "tool",
+                "content": {
+                    "id": "indoor_temp_sensor",
+                    "type": "sensor", 
+                    "status": "23.0",
+                    "timestamp": "2025-04-25T21:59:56.143436"
+                }
+            },
+            {
+                "from": "assistant",
+                "content": {
+                    "message": "The temperature in the house is 23 degrees."
+                }
+            }
+        ]
+    }
+]

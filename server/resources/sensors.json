@@ -1,0 +1,24 @@
+{
+  "sensors": [
+    {
+      "id": "indoor_temp_sensor",
+      "type": "IndoorTempSensor",
+      "status": 20.4
+    },
+    {
+      "id": "outdoor_temp_sensor",
+      "type": "OutdoorTempSensor",
+      "status": -6.5
+    },
+    {
+      "id": "main_power_meter",
+      "type": "PowerMeter",
+      "status": 472
+    },
+    {
+      "id": "rain_sensor",
+      "type": "RainSensor",
+      "status": 0.8
+    }
+  ]
+}

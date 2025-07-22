@@ -1,4 +1,22 @@
-# client/strategies/local_strategy.py
+"""
+client/strategies/local.py - Local LLM Strategy Implementation
+
+This module implements the local LLM strategy using Qwen2 model via LlamaCpp.
+It handles voice input/output and processes queries through the local model.
+
+Key Features:
+- Local LLM inference with Qwen2
+- Voice input via ASR
+- Voice output via TTS
+- Tool call integration with MCP
+
+Location: client/strategies/local.py (relative to project root)
+
+Dependencies:
+- .base: Base strategy interface
+- ..llm: Chat engine and model
+- ..speech: TTS and ASR modules
+"""
 import json
 import asyncio
 import re
@@ -10,72 +28,126 @@ from ..speech.tts import TTSModule
 from ..speech.asr import ASRModule
 
 def clean_payload(payload):
-    # 遍历 payload 的所有键值对，移除值为 None 的键
+    """Remove None values from payload dictionary."""
     return {key: value for key, value in payload.items() if value is not None}
 
 class LocalLLMStrategy(BaseStrategy):
     """
-    用本地 LlamaCpp(Qwen2) 推理。
-    逻辑：
-        1️⃣ 把用户 query 喂给 ChatEngine(本地模型) -> str
-        2️⃣ 解析返回；按约定如果 message.type == "tool" 就调 MCP
-        3️⃣ 若还有 follow-up，再回到 1️⃣
+    Local LLM strategy using Qwen2 model via LlamaCpp.
+    
+    Processing flow:
+    1. Feed user query to ChatEngine (local model) -> str response
+    2. Parse response - if message.type == "tool" call MCP
+    3. If follow-up needed, return to step 1
+    
+    Supports both text and voice interaction modes.
     """
+
     def __init__(self, mcp):
+        """
+        Initialize local LLM strategy.
+        
+        Args:
+            mcp: MCPClient instance for tool execution
+        """
         super().__init__(mcp)
         self.engine = ChatEngine(MODEL_FILE)
         self.tts = TTSModule()
         self.asr = ASRModule()
 
     async def chat_loop(self) -> None:
-        print("💬 进入本地 LLM 对话循环 (quit 退出)")
+        """Main chat interaction loop with voice input."""
+        print("💬 Entering local LLM chat loop (type 'quit' to exit)")
         while True:
-            # query = input("\nQuery: ")
-            print("🎙️正在监听... ")
-            # 自动开始监听
-            # query = self.asr.listen_and_transcribe()
+            print("🎙️ Listening...")
             query = self.asr.transcribe_mic(chunk_length_s=5)
-            print(f"📝监听结果: {query} ")
+            print(f"📝 Transcription: {query}")
             if query.lower() == "quit":
                 break
             await self._single_round(query)
 
-    # ----------------- helpers -----------------
+    # ----------------- Helper Methods -----------------
+    # @staticmethod
+    # def _safe_json(txt: str) -> Optional[Dict[str, Any]]:
+    #     """
+    #     Safely parse JSON string, cleaning invalid characters.
+        
+    #     Args:
+    #         txt: Input string potentially containing JSON
+            
+    #     Returns:
+    #         Parsed JSON dict or None if invalid
+    #     """
+    #     # Clean potential invalid JSON prefixes/suffixes
+    #     txt = re.sub(r'}$', '', txt)  # Fix trailing braces
+    #     # print(f"Cleaned text:\n{txt}")
+
+    #     try:
+    #         return json.loads(txt)
+    #     except json.JSONDecodeError as e:
+    #         print(f"JSON decode error: {e}")
+    #         return None
     @staticmethod
     def _safe_json(txt: str) -> Optional[Dict[str, Any]]:
-        # 移除潜在的无关字符（如 'json' 或多余的符号），只保留有效的 JSON 部分
-        # txt = re.sub(r"^\s*(json|```|<\s*json.*?>)*", "", txt)  # 清除开头的 `json` 或其他无关文本
-        # txt = re.sub(r"\s*```", "", txt)  # 去掉多余的反引号
-        txt = re.sub(r'}$', '', txt)  # 修正多余的右括号后的数据
-        print(f"txt:\n{txt}")
+        """
+        Safely parse the first JSON object found in a string, ignoring leading/trailing garbage.
 
-        # 如果字符串中包含非法字符或没有形成有效的 JSON，返回 None
+        Args:
+            txt: Input string potentially containing JSON.
+
+        Returns:
+            Parsed JSON dict (first object) or None if invalid/not found.
+        """
+        # Find the first '{'
+        start = txt.find('{')
+        if start == -1:
+            # no JSON object start
+            return None
+
+        txt = txt[start:]
+
+        decoder = json.JSONDecoder()
         try:
-            return json.loads(txt)
+            # raw_decode returns (obj, end_index)
+            obj, end = decoder.raw_decode(txt)
+            return obj
         except json.JSONDecodeError as e:
-            print(f"JSON 解码错误: {e}")
+            # Could not decode a full object from txt
+            print(f"JSON decode error: {e}")
             return None
 
     async def _single_round(self, query: str) -> None:
-        reply = self.engine.ask(query)      # <-- 同步返回 str     
+        """
+        Process a single query-response cycle.
+        
+        Args:
+            query: User input query string
+        """
+        reply = self.engine.ask(query)
+        # print(f'reply:\n{reply}')
         payload = self._safe_json(reply)
-        print(f'payload:\n{payload}')
-        if payload:
+        print(f'Payload:\n{payload}')
+        # self.tts.speak(payload["message"])
+        if payload is not None:
             self.tts.speak(payload["message"])
+            pass
 
-        # 情形 A：模型直接给自然语言
+        # Case A: Direct natural language response
         if not payload or payload.get("type") != "tool":
-            print("\n🔊 回复：", reply)
-            self.tts.speak(payload)
+            print("\n🔊 Response:", reply)
+            if payload:
+                self.tts.speak(payload["message"])
             return
 
-        # 情形 B：需要调工具
+        # Case B: Tool call required
         payload["arguments"] = clean_payload(payload["arguments"])
-        print(f"📞 本地 LLM 要调用 {payload['name']} {payload['arguments']}")
+        print(f"📞 Local LLM requesting tool call: {payload['name']} {payload['arguments']}")
         result = await self.mcp.call_tool(payload["name"], payload["arguments"])
-        print(f"✅ 工具返回：{result}")
+        print(f"✅ Tool response: {result}")
 
-        # 把工具返回再丢回模型，让它生成最终答复
-        follow_up = self.engine.ask('rool: '+result)
-        self.tts.speak(str(follow_up))
-        print("\n🔊 回复：", follow_up)
+        # Feed tool result back to model for final response
+        follow_up = self.engine.ask('tool: '+result)
+        payload = self._safe_json(follow_up)
+        if payload:
+            self.tts.speak(str(payload["message"]))
+        print("\n🔊 Final response:", follow_up)

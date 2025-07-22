@@ -1,3 +1,24 @@
+"""
+client/main.py - MCP Client Main Entry Point
+
+This module implements the main client interface for the Model Context Protocol (MCP)
+smart home system. It handles communication with the MCP server and coordinates
+LLM-powered device control through tool calls.
+
+Key Features:
+- MCP server connection management
+- LLM-powered query processing
+- Tool call execution
+- Interactive chat interface
+
+Location: client/main.py (relative to project root)
+
+Dependencies:
+- mcp: MCP protocol implementation
+- openai: OpenAI API client
+- dotenv: Environment variable management
+"""
+
 import asyncio
 import json
 import os
@@ -12,41 +33,77 @@ from mcp.client.stdio import stdio_client
 from pydantic import FileUrl
 import subprocess
 
-# 加载环境变量，例如 OPENAI_API_KEY、OPENAI_MODEL 等
+# Load environment variables (OPENAI_API_KEY, OPENAI_MODEL etc.)
 load_dotenv()
 
 
 class MCPClient:
+    """
+    Main client class for MCP smart home system.
+    
+    Handles:
+    - Server connection management
+    - LLM-powered query processing
+    - Tool call execution
+    - Resource cleanup
+    
+    Attributes:
+        session: Active MCP client session
+        exit_stack: Async resource manager
+        client: OpenAI client instance
+    """
     def __init__(self):
         self.session: Optional[ClientSession] = None
         self.exit_stack = AsyncExitStack()
         self.client = OpenAI()
 
     async def connect_to_server(self):
-        """连接 MCP 服务器并初始化 session"""
-        print("🔌 正在连接到 MCP 服务器...")
+        """
+        Establish connection to MCP server and initialize session.
+        
+        Uses stdio transport to communicate with server process.
+        Prints connection status messages.
+        
+        Raises:
+            ConnectionError: If server connection fails
+        """
+        print("🔌 Connecting to MCP server...")
         server_params = StdioServerParameters(
             command='uv',
             args=['run', 'server/app.py'],
             env=None
         )
 
-        # 建立与服务器的标准输入输出连接
+        # Establish stdio connection with server
         stdio_transport = await self.exit_stack.enter_async_context(
             stdio_client(server_params))
         stdio, write = stdio_transport
 
-        # 初始化客户端会话
+        # Initialize client session
         self.session = await self.exit_stack.enter_async_context(
             ClientSession(stdio, write))
         await self.session.initialize()
-        print("✅ MCP 客户端会话已初始化。")
+        print("✅ MCP client session initialized")
 
     async def process_query(self, query: str) -> str:
         """
-        处理用户查询：处理 LLM 的多次工具调用直到生成最终用户响应
+        Process user query through LLM tool calls to generate final response.
+        
+        Args:
+            query: User input string to process
+            
+        Returns:
+            str: Final natural language response after executing all tool calls
+            
+        Steps:
+            1. Setup system prompt with tool usage instructions
+            2. Get available tools from MCP server
+            3. Get device/sensor status lists
+            4. Call LLM to generate tool calls
+            5. Execute tool calls and collect results
+            6. Get final natural language response from LLM
         """
-        print(f"🧠 正在处理用户查询：{query}")
+        print(f"🧠 Processing user query: {query}")
 
         system_prompt = (
             "You are a smart home assistant. User queries are meant to control various home devices.\n"
@@ -66,10 +123,10 @@ class MCPClient:
             "available tools and devices are below\n"
         )
 
-        # 获取当前 MCP 服务器支持的工具
-        print("🛠️ 正在请求工具列表...")
+        # Get available tools from MCP server
+        print("🛠️ Requesting tool list...")
         response = await self.session.list_tools()
-        print(f"🧰 可用工具：{[tool.name for tool in response.tools]}")
+        print(f"🧰 Available tools: {[tool.name for tool in response.tools]}")
 
         available_tools = [{
             "type": "function",
@@ -80,13 +137,13 @@ class MCPClient:
             }
         } for tool in response.tools]
 
-        # 获取设备和传感器列表
-        response= await self.session.read_resource("file://devices")
-        # print(f"🏡 设备列表：{response.contents[0].text}")
+        # Get device and sensor lists from MCP server
+        response = await self.session.read_resource("file://devices")
+        # print(f"🏡 Device list: {response.contents[0].text}")
         data = json.loads(str(response.contents[0].text))
         devices = data[0]['content']['devices']
         sensors = data[1]['content']['sensors']
-        # 创建包含设备和传感器的 id 和 status 的字典列表
+        # Create dictionaries with device/sensor IDs and statuses
         available_devices = [{"id": device["id"], "status": device["status"]} for device in devices]
         available_sensors = [{"id": sensor["id"], "status": sensor["status"]} for sensor in sensors]
 
@@ -96,21 +153,21 @@ class MCPClient:
         ]
         # print(f"💬 messages：{messages}")
 
-        # 请求大模型
-        print("🤖 正在调用大模型生成工具调用...")
+        # Call LLM to generate tool calls
+        print("🤖 Calling LLM to generate tool calls...")
         response = self.client.chat.completions.create(
             model=os.getenv("OPENAI_MODEL"),
             messages=messages,
             tools=available_tools,
         )
-        print(f"🗣️ LLM 响应：{response}")
+        print(f"🗣️ LLM response: {response}")
 
         content = response.choices[0]
         tool_calls = []
 
-        # 检查 LLM 响应中的工具调用
+        # Check for tool calls in LLM response
         if content.finish_reason == "tool_calls":
-            tool_calls = content.message.tool_calls  # 获取工具调用列表
+            tool_calls = content.message.tool_calls  # Get list of tool calls
             messages.append({
                 "role": "assistant",
                 "tool_calls": [{
@@ -123,70 +180,88 @@ class MCPClient:
                 } for tool_call in tool_calls]
             })
 
-            # 继续调用工具
+            # Execute each tool call
             for tool_call in tool_calls:
                 tool_name = tool_call.function.name
                 tool_args = json.loads(tool_call.function.arguments)
-                print(f"📞 LLM 要调用工具：{tool_name}，参数：{tool_args}")
+                print(f"📞 LLM requesting tool call: {tool_name}, args: {tool_args}")
 
-                # 执行工具调用
+                # Execute the tool call
                 result = await self.session.call_tool(tool_name, tool_args)
                 tool_response = ', '.join([
                     item if isinstance(item, str) else getattr(item, 'text', 'No response')
                     for item in result.content
                 ]) or "No response"
-                print(f"✅ 工具调用完成，返回：{tool_response}")
+                print(f"✅ Tool call completed, response: {tool_response}")
 
-                # 将工具调用的结果加入消息列表
+                # Add tool response to messages
                 messages.append({
                     "role": "tool",
                     "content": tool_response,
                     "tool_call_id": tool_call.id,
                 })
-                # print(f"✅ 工具调用的结果加入消息列表：{messages}")
+                # print(f"✅ Tool response added to messages: {messages}")
 
-            # 继续请求 LLM 生成新的响应
-            print("🧠 再次调用大模型以生成新的自然语言响应...")
+            # Request final natural language response from LLM
+            print("🧠 Requesting final natural language response from LLM...")
             response = self.client.chat.completions.create(
                 model=os.getenv("OPENAI_MODEL"),
                 messages=messages,
                 # tools=available_tools,
             )
-            print(f"🗣️ LLM 响应：{response.choices[0]}")
+            print(f"🗣️ LLM response: {response.choices[0]}")
 
             content = response.choices[0]
 
         if content.finish_reason == "stop":
-            # print(f"🗣️ LLM 最终响应：{content.message.content}")
+            # print(f"🗣️ LLM final response: {content.message.content}")
             return content.message.content
         else:
-            # 如果没有返回最终响应，则继续处理
+            # If no final response, continue processing
             return await self.process_query(query)
 
     async def chat_loop(self):
-        """主循环，持续接收用户输入并交互"""
-        print("💬 进入对话循环，输入 'quit' 可退出")
+        """
+        Main interactive chat loop for processing user queries.
+        
+        Continuously prompts for user input until 'quit' is entered.
+        Handles each query through process_query() and prints responses.
+        Shows error details if exceptions occur.
+        """
+        print("💬 Entering chat loop (type 'quit' to exit)")
         while True:
             try:
                 query = input("\nQuery: ").strip()
                 if query.lower() == 'quit':
                     break
                 response = await self.process_query(query)
-                print("\n🔊 回复：", response)
+                print("\n🔊 Response:", response)
             except Exception as e:
                 import traceback
-                print("❌ 出错啦：")
+                print("❌ Error occurred:")
                 traceback.print_exc()
 
     async def cleanup(self):
-        """释放资源"""
-        print("🧹 正在清理资源...")
+        """
+        Clean up resources and close connections.
+        
+        Properly closes the async exit stack which manages:
+        - MCP server connection
+        - Session resources
+        - Any other async resources
+        """
+        print("🧹 Cleaning up resources...")
         await self.exit_stack.aclose()
-        print("🧼 清理完成。")
+        print("🧼 Cleanup completed.")
 
 
 async def main():
-    """程序主入口"""
+    """
+    Main entry point for MCP client application.
+    
+    Initializes client, connects to server, runs chat loop,
+    and ensures proper cleanup on exit.
+    """
     client = MCPClient()
     try:
         await client.connect_to_server()
