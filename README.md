@@ -1,4 +1,27 @@
 # Smart Home Voice Control System
+这是宁诺CS研究生课程作业。
+
+本项目调通了MCP在家居场景下的LLM外部工具调用流程：<br>用户语音<->ASR<->LLM<->MCP Client<->MCP Server<->家电设备
+
+并且微调量化了一个Qwen2.5-1.5B使其能放在弱算力的树莓派4B上运行
+
+简历中的描述如下：
+<br>智能家居语音控制Agent- 个人独立
+2025-04 ~ 2025-04
+1. 基于树莓派 4B，实现了支持语音交互的家电控制 Agent，涵盖 MCP 、LLM 监督微调、ASR/TTS 和模型量化部署
+2. 利用MCP官方Python SDK，在Server端实现了外部工具调用，在Client端用LangChain加载模型、构建提示词工程
+3. 调用 DeepSeek API 生成1000条ShareGPT 格式对话，数据清洗，置入MCP流程验证有效性
+4. 利用Llama-Factory对Qwen2.5‑1.5B模型进行指令微调，合并LoRA，再用llama.cpp将safetensor转为gguf并做4-bit量化
+5. 在对话流程中嵌入Whisper ASR和pyttsx3 TTS，实现全程语音问答
+
+<br>流程图
+![\[!image.png\]](imgs/image.png)
+<br>架构图
+![alt text](<imgs/image copy.png>)
+<br>MCP调试工具
+![alt text](imgs/MCPinspector.png)
+<br>微调和量化
+![alt text](imgs/微调和量化.png)
 
 A Python-based smart home simulation system that allows voice control of home appliances through either online API or local LLM.
 Github: https://github.com/1478387600/SmartHome/tree/simulation
